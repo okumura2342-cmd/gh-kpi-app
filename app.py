@@ -6,8 +6,6 @@ from datetime import datetime
 
 from streamlit_option_menu import option_menu
 
-from openai import OpenAI
-
 # ====================================
 # ページ設定
 # ====================================
@@ -27,10 +25,6 @@ conn = sqlite3.connect(
 )
 
 cursor = conn.cursor()
-
-client = OpenAI(
-    api_key=st.secrets["OPENAI_API_KEY"]
-)
 
 # ====================================
 # users テーブル
@@ -777,48 +771,6 @@ else:
             )
         )
 
-        if st.button("🤖 AI提案"):
-
-            prompt = f"""
-            グループホームの介護職向け重点項目を提案してください。
-
-            サービス:
-            {service1}
-
-            収入:
-            {income1}
-
-            経費:
-            {expense1}
-
-            時間:
-            {time1}
-
-            現場向けで、
-            短く、
-            実践的にしてください。
-            """
-
-            response = client.chat.completions.create(
-
-                model="gpt-4.1-mini",
-
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-
-            )
-
-            ai_text = (
-                response.choices[0]
-                .message.content
-            )
-
-            st.success(ai_text)
-
         col1, col2 = st.columns(2)
 
         with col1:
@@ -1499,118 +1451,118 @@ else:
             ]
         )
 
-    if st.button("追加"):
+        if st.button("追加"):
 
-        cursor.execute("""
-        INSERT INTO users (
-            name,
-            role,
-            is_active
-        )
-        VALUES (?, ?, ?)
-        """,
-        (
-            new_name,
-            new_role,
-            1
-        ))
-
-        conn.commit()
-
-        st.rerun()
-
-        st.divider()
-
-        users_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM users
-            ORDER BY role DESC
+            cursor.execute("""
+            INSERT INTO users (
+                name,
+                role,
+                is_active
+            )
+            VALUES (?, ?, ?)
             """,
-            conn
-        )
+            (
+                new_name,
+                new_role,
+                1
+            ))
 
-        st.subheader("職員一覧")
+            conn.commit()
 
-        for _, row in users_df.iterrows():
+            st.rerun()
 
-            col1, col2, col3 = st.columns([3,2,1])
+            st.divider()
 
-            with col1:
-                st.write(row["name"])
+            users_df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM users
+                ORDER BY role DESC
+                """,
+                conn
+            )
 
-            with col2:
+            st.subheader("職員一覧")
 
-                status = "在職"
+            for _, row in users_df.iterrows():
 
-                if row["is_active"] == 0:
-                    status = "停止"
+                col1, col2, col3 = st.columns([3,2,1])
 
-                st.write(
-                    f"{row['role']} / {status}"
-                )
+                with col1:
+                    st.write(row["name"])
 
-            with col3:
+                with col2:
 
-                if row["is_active"] == 1:
+                    status = "在職"
 
-                    if st.button(
-                        "停止",
-                        key=f"stop_{row['id']}"
-                    ):
+                    if row["is_active"] == 0:
+                        status = "停止"
 
-                        cursor.execute("""
-                        UPDATE users
-                        SET is_active = 0
-                        WHERE id = ?
-                        """,
-                        (
-                            row["id"],
-                        ))
+                    st.write(
+                        f"{row['role']} / {status}"
+                    )
 
-                        conn.commit()
+                with col3:
 
-                        st.rerun()
+                    if row["is_active"] == 1:
 
-                else:
+                        if st.button(
+                            "停止",
+                            key=f"stop_{row['id']}"
+                        ):
 
-                    if st.button(
-                        "復帰",
-                        key=f"back_{row['id']}"
-                    ):
+                            cursor.execute("""
+                            UPDATE users
+                            SET is_active = 0
+                            WHERE id = ?
+                            """,
+                            (
+                                row["id"],
+                            ))
 
-                        cursor.execute("""
-                        UPDATE users
-                        SET is_active = 1
-                        WHERE id = ?
-                        """,
-                        (
-                            row["id"],
-                        ))
+                            conn.commit()
 
-                        conn.commit()
+                            st.rerun()
 
-                        st.rerun()
+                    else:
 
-        st.divider()
+                        if st.button(
+                            "復帰",
+                            key=f"back_{row['id']}"
+                        ):
 
-        cursor.execute("""
-        INSERT INTO users (
-            name,
-            role,
-            is_active
-        )
-        VALUES (?, ?, ?)
-        """,
-        (
-            new_name,
-            new_role,
-            1
-        ))
+                            cursor.execute("""
+                            UPDATE users
+                            SET is_active = 1
+                            WHERE id = ?
+                            """,
+                            (
+                                row["id"],
+                            ))
 
-        conn.commit()
+                            conn.commit()
 
-        st.rerun()
+                            st.rerun()
+
+            st.divider()
+
+            cursor.execute("""
+            INSERT INTO users (
+                name,
+                role,
+                is_active
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                new_name,
+                new_role,
+                1
+            ))
+
+            conn.commit()
+
+            st.rerun()
 
     # ====================================
     # ログアウト
