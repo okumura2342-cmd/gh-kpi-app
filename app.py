@@ -327,6 +327,45 @@ if not st.session_state.logged_in:
 
                 st.rerun()
 
+                st.divider()
+
+                st.markdown("""
+                <div style="
+                background-color:#1e293b;
+                padding:20px;
+                border-radius:18px;
+                margin-top:10px;
+                border:1px solid #334155;
+                ">
+
+                <h3 style="color:#f8fafc;">
+                📢 アップデート情報
+                </h3>
+
+                <div style="
+                color:#cbd5e1;
+                line-height:1.8;
+                font-size:15px;
+                ">
+
+                🆕 下書き編集機能を追加しました<br>
+
+                🆕 リーダーチャット機能改善<br>
+
+                🆕 提出状況確認機能追加<br>
+
+                🆕 スマホUI改善<br>
+
+                🛠 不具合修正・安定化対応
+
+                </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True)
+
+                st.caption("Version 1.3.0")
+
 # ====================================
 # ログイン後
 # ====================================
@@ -421,33 +460,161 @@ else:
 
         st.subheader("ホーム")
 
+        st.markdown("""
+        <style>
+
+        .manual-card {
+
+            background-color: #1e293b;
+
+            padding: 20px;
+
+            border-radius: 18px;
+
+            margin-bottom: 18px;
+
+            border: 1px solid #334155;
+
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+
+        }
+
+        .manual-title {
+
+            font-size: 22px;
+
+            font-weight: bold;
+
+            margin-bottom: 12px;
+
+            color: #f8fafc;
+
+        }
+
+        .manual-text {
+
+            font-size: 15px;
+
+            line-height: 1.8;
+
+            color: #cbd5e1;
+
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="manual-card">
+
+        <div class="manual-title">
+        🏠 ホーム
+        </div>
+
+        <div class="manual-text">
+        ・今月の提出状況を確認できます<br>
+        ・提出済 / 未提出 が表示されます
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="manual-card">
+
+        <div class="manual-title">
+        ✍ 入力
+        </div>
+
+        <div class="manual-text">
+        ・重点項目を入力します<br>
+        ・下書き保存可能<br>
+        ・提出後も編集可能
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="manual-card">
+
+        <div class="manual-title">
+        🕘 履歴
+        </div>
+
+        <div class="manual-text">
+        ・過去提出内容確認<br>
+        ・編集 / 削除可能<br>
+        ・下書き編集可能
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="manual-card">
+
+        <div class="manual-title">
+        💬 連絡
+        </div>
+
+        <div class="manual-text">
+        ・リーダーへチャット送信<br>
+        ・未読確認可能
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True)
+
         with st.expander("📖 使い方マニュアル"):
 
-            st.markdown("""
-            ### 基本操作
+            st.markdown("## 🏠 ホーム")
+            st.info("""
+        ・今月の提出状況を確認できます
+        ・未提出 / 提出済 が表示されます
+        """)
 
-            【入力】
-            ・重点項目を入力します
-            ・下書き保存可能
-            ・提出後は履歴へ保存されます
+            st.markdown("## ✍ 入力")
+            st.success("""
+        ・重点項目を入力します
+        ・下書き保存可能
+        ・提出後は履歴へ保存されます
+        ・提出後も編集可能
+        """)
 
-            【履歴】
-            ・過去提出内容を確認できます
-            ・編集、削除可能
+            st.markdown("## 🕘 履歴")
+            st.warning("""
+        ・過去提出内容を確認できます
+        ・編集、削除可能
+        ・下書きも表示されます
+        """)
 
-            【連絡】
-            ・リーダーから重点項目に関する連絡が届きます
-            　それに対して返信も可能です
+            st.markdown("## 💬 連絡")
+            st.info("""
+        ・リーダーへチャット送信できます
+        ・既読/未読確認できます
+        """)
 
-            【確認】※リーダーのみ操作可能
-            ・提出状況確認
-            ・職員とのチャット
-            ・重点項目確認
+            if st.session_state.role == "leader":
 
-            【管理】※リーダーのみ操作可能
-            ・職員追加
-            ・停止/復帰
-            """)
+                st.markdown("## 👀 確認")
+                st.error("""
+        ・職員の提出状況確認
+        ・重点項目確認
+        ・個別チャット
+        """)
+
+                st.markdown("## 👥 管理")
+                st.success("""
+        ・職員追加
+        ・停止 / 復帰
+        ・権限管理
+        """)
 
         submitted_df = pd.read_sql_query(
             """
