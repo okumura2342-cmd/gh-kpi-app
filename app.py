@@ -195,6 +195,9 @@ if "selected_staff" not in st.session_state:
 if "edit_entry_id" not in st.session_state:
     st.session_state.edit_entry_id = None
 
+if "edit_draft_id" not in st.session_state:
+    st.session_state.edit_draft_id = None
+
 if "selected_menu" not in st.session_state:
     st.session_state.selected_menu = "個人"
 
@@ -333,44 +336,44 @@ if not st.session_state.logged_in:
 
                 st.rerun()
 
-                st.divider()
+            st.divider()
 
-                st.markdown("""
-                <div style="
-                background-color:#1e293b;
-                padding:20px;
-                border-radius:18px;
-                margin-top:10px;
-                border:1px solid #334155;
-                ">
+            st.markdown("""
+            <div style="
+            background-color:#1e293b;
+            padding:20px;
+            border-radius:18px;
+            margin-top:10px;
+            border:1px solid #334155;
+            ">
 
-                <h3 style="color:#f8fafc;">
-                📢 アップデート情報
-                </h3>
+            <h3 style="color:#f8fafc;">
+            📢 アップデート情報
+            </h3>
 
-                <div style="
-                color:#cbd5e1;
-                line-height:1.8;
-                font-size:15px;
-                ">
+            <div style="
+            color:#cbd5e1;
+            line-height:1.8;
+            font-size:15px;
+            ">
 
-                🆕 下書き編集機能を追加しました<br>
+            🆕 下書き編集機能を追加しました<br>
 
-                🆕 リーダーチャット機能改善<br>
+            🆕 リーダーチャット機能改善<br>
 
-                🆕 提出状況確認機能追加<br>
+            🆕 提出状況確認機能追加<br>
 
-                🆕 スマホUI改善<br>
+            🆕 スマホUI改善<br>
 
-                🛠 不具合修正・安定化対応
+            🛠 不具合修正・安定化対応
 
-                </div>
+            </div>
 
-                </div>
-                """,
-                unsafe_allow_html=True)
+            </div>
+            """,
+            unsafe_allow_html=True)
 
-                st.caption("Version 1.3.0")
+            st.caption("Version 1.3.0")
 
 # ====================================
 # ログイン後
@@ -508,72 +511,6 @@ else:
         }
 
         </style>
-        """,
-        unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="manual-card">
-
-        <div class="manual-title">
-        🏠 ホーム
-        </div>
-
-        <div class="manual-text">
-        ・今月の提出状況を確認できます<br>
-        ・提出済 / 未提出 が表示されます
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="manual-card">
-
-        <div class="manual-title">
-        ✍ 入力
-        </div>
-
-        <div class="manual-text">
-        ・重点項目を入力します<br>
-        ・下書き保存可能<br>
-        ・提出後も編集可能
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="manual-card">
-
-        <div class="manual-title">
-        🕘 履歴
-        </div>
-
-        <div class="manual-text">
-        ・過去提出内容確認<br>
-        ・編集 / 削除可能<br>
-        ・下書き編集可能
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="manual-card">
-
-        <div class="manual-title">
-        💬 連絡
-        </div>
-
-        <div class="manual-text">
-        ・リーダーへチャット送信<br>
-        ・未読確認可能
-        </div>
-
-        </div>
         """,
         unsafe_allow_html=True)
 
@@ -1562,118 +1499,118 @@ else:
             ]
         )
 
-        if st.button("追加"):
+    if st.button("追加"):
 
-            cursor.execute("""
-            INSERT INTO users (
-                name,
-                role,
-                is_active
-            )
-            VALUES (?, ?, ?)
+        cursor.execute("""
+        INSERT INTO users (
+            name,
+            role,
+            is_active
+        )
+        VALUES (?, ?, ?)
+        """,
+        (
+            new_name,
+            new_role,
+            1
+        ))
+
+        conn.commit()
+
+        st.rerun()
+
+        st.divider()
+
+        users_df = pd.read_sql_query(
+            """
+            SELECT *
+            FROM users
+            ORDER BY role DESC
             """,
-            (
-                new_name,
-                new_role,
-                1
-            ))
+            conn
+        )
 
-            conn.commit()
+        st.subheader("職員一覧")
 
-            st.rerun()
+        for _, row in users_df.iterrows():
 
-            st.divider()
+            col1, col2, col3 = st.columns([3,2,1])
 
-            users_df = pd.read_sql_query(
-                """
-                SELECT *
-                FROM users
-                ORDER BY role DESC
-                """,
-                conn
-            )
+            with col1:
+                st.write(row["name"])
 
-            st.subheader("職員一覧")
+            with col2:
 
-            for _, row in users_df.iterrows():
+                status = "在職"
 
-                col1, col2, col3 = st.columns([3,2,1])
+                if row["is_active"] == 0:
+                    status = "停止"
 
-                with col1:
-                    st.write(row["name"])
+                st.write(
+                    f"{row['role']} / {status}"
+                )
 
-                with col2:
+            with col3:
 
-                    status = "在職"
+                if row["is_active"] == 1:
 
-                    if row["is_active"] == 0:
-                        status = "停止"
+                    if st.button(
+                        "停止",
+                        key=f"stop_{row['id']}"
+                    ):
 
-                    st.write(
-                        f"{row['role']} / {status}"
-                    )
+                        cursor.execute("""
+                        UPDATE users
+                        SET is_active = 0
+                        WHERE id = ?
+                        """,
+                        (
+                            row["id"],
+                        ))
 
-                with col3:
+                        conn.commit()
 
-                    if row["is_active"] == 1:
+                        st.rerun()
 
-                        if st.button(
-                            "停止",
-                            key=f"stop_{row['id']}"
-                        ):
+                else:
 
-                            cursor.execute("""
-                            UPDATE users
-                            SET is_active = 0
-                            WHERE id = ?
-                            """,
-                            (
-                                row["id"],
-                            ))
+                    if st.button(
+                        "復帰",
+                        key=f"back_{row['id']}"
+                    ):
 
-                            conn.commit()
+                        cursor.execute("""
+                        UPDATE users
+                        SET is_active = 1
+                        WHERE id = ?
+                        """,
+                        (
+                            row["id"],
+                        ))
 
-                            st.rerun()
+                        conn.commit()
 
-                    else:
+                        st.rerun()
 
-                        if st.button(
-                            "復帰",
-                            key=f"back_{row['id']}"
-                        ):
+        st.divider()
 
-                            cursor.execute("""
-                            UPDATE users
-                            SET is_active = 1
-                            WHERE id = ?
-                            """,
-                            (
-                                row["id"],
-                            ))
+        cursor.execute("""
+        INSERT INTO users (
+            name,
+            role,
+            is_active
+        )
+        VALUES (?, ?, ?)
+        """,
+        (
+            new_name,
+            new_role,
+            1
+        ))
 
-                            conn.commit()
+        conn.commit()
 
-                            st.rerun()
-
-            st.divider()
-
-            cursor.execute("""
-            INSERT INTO users (
-                name,
-                role,
-                is_active
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                new_name,
-                new_role,
-                1
-            ))
-
-            conn.commit()
-
-            st.rerun()
+        st.rerun()
 
     # ====================================
     # ログアウト
