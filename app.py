@@ -6,6 +6,8 @@ from datetime import datetime
 
 from streamlit_option_menu import option_menu
 
+from openai import OpenAI
+
 # ====================================
 # ページ設定
 # ====================================
@@ -25,6 +27,10 @@ conn = sqlite3.connect(
 )
 
 cursor = conn.cursor()
+
+client = OpenAI(
+    api_key=st.secrets["OPENAI_API_KEY"]
+)
 
 # ====================================
 # users テーブル
@@ -833,6 +839,48 @@ else:
                 )
             )
         )
+
+        if st.button("🤖 AI提案"):
+
+            prompt = f"""
+            グループホームの介護職向け重点項目を提案してください。
+
+            サービス:
+            {service1}
+
+            収入:
+            {income1}
+
+            経費:
+            {expense1}
+
+            時間:
+            {time1}
+
+            現場向けで、
+            短く、
+            実践的にしてください。
+            """
+
+            response = client.chat.completions.create(
+
+                model="gpt-4.1-mini",
+
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+
+            )
+
+            ai_text = (
+                response.choices[0]
+                .message.content
+            )
+
+            st.success(ai_text)
 
         col1, col2 = st.columns(2)
 
