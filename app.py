@@ -77,6 +77,38 @@ CREATE TABLE IF NOT EXISTS entries (
 """)
 
 # ====================================
+# drafts テーブル
+# ====================================
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS drafts (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_name TEXT,
+
+    month TEXT,
+
+    service1 TEXT,
+    service2 TEXT,
+
+    income1 TEXT,
+    income2 TEXT,
+
+    expense1 TEXT,
+    expense2 TEXT,
+
+    time1 TEXT,
+    time2 TEXT,
+
+    proposal TEXT,
+
+    updated_at TEXT
+
+)
+""")
+
+# ====================================
 # messages テーブル
 # ====================================
 
@@ -90,6 +122,8 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_role TEXT,
 
     target_user TEXT,
+
+    month TEXT,
 
     message TEXT,
 
@@ -152,6 +186,12 @@ if "role" not in st.session_state:
 if "selected_staff" not in st.session_state:
     st.session_state.selected_staff = None
 
+if "edit_entry_id" not in st.session_state:
+    st.session_state.edit_entry_id = None
+
+if "selected_menu" not in st.session_state:
+    st.session_state.selected_menu = "個人"
+
 # ====================================
 # CSS
 # ====================================
@@ -159,262 +199,77 @@ if "selected_staff" not in st.session_state:
 st.markdown("""
 <style>
 
-/* ====================================
-全体
-==================================== */
-
 .stApp {
-
     background-color: #0f172a;
-
     color: #f8fafc;
-
 }
 
 .main .block-container {
-
     max-width: 950px;
-
     padding-top: 2rem;
-
 }
 
-/* ====================================
-タイトル
-==================================== */
-
-h1,
-h2,
-h3 {
-
+h1,h2,h3,p,label,div {
     color: #f8fafc;
-
-    font-weight: 700;
-
 }
-
-p,
-label,
-div {
-
-    color: #f8fafc;
-
-}
-
-/* ====================================
-メニュー
-==================================== */
 
 .nav {
-
     background-color: #1e1e2f !important;
-
     border-radius: 14px;
-
     padding: 8px;
-
 }
 
 .nav-link {
-
     border-radius: 12px !important;
-
     color: #f8fafc !important;
-
     font-weight: 600 !important;
-
 }
 
 .nav-link.active {
-
     background-color: #ff4b4b !important;
-
     color: white !important;
-
 }
-
-/* ====================================
-ボタン
-==================================== */
 
 .stButton > button {
-
     width: 100%;
-
     border-radius: 12px;
-
     border: none;
-
     background: #22c55e;
-
     color: white;
-
     font-weight: 700;
-
     padding: 12px;
-
 }
-
-.stButton > button:hover {
-
-    background: #16a34a;
-
-    color: white;
-
-}
-
-/* ====================================
-入力欄
-==================================== */
 
 .stTextArea textarea {
-
     background-color: #111827;
-
     color: white;
-
     border-radius: 12px;
-
     border: 1px solid #374151;
-
 }
 
 .stSelectbox > div > div {
-
     background-color: #111827;
-
     color: white;
-
     border-radius: 12px;
-
     border: 1px solid #374151;
-
 }
 
-/* ====================================
-チャット
-==================================== */
-
 .chat-left {
-
     background: #1f2937;
-
     color: white;
-
     padding: 14px;
-
     border-radius: 16px;
-
     margin-right: 25%;
-
     margin-bottom: 12px;
-
 }
 
 .chat-right {
-
     background: #22c55e;
-
     color: white;
-
     padding: 14px;
-
     border-radius: 16px;
-
     margin-left: 25%;
-
     margin-bottom: 12px;
-
-}
-
-/* ====================================
-区切り線
-==================================== */
-
-hr {
-
-    border-color: #374151;
-
-}
-
-/* ====================================
-スマホ menu 修正版
-==================================== */
-@media (max-width: 768px) {
-
-    /* menu 全体 */
-    div[data-testid="stHorizontalBlock"] ul {
-
-        display: flex !important;
-
-        justify-content: center !important;
-
-        align-items: center !important;
-
-        gap: 6px !important;
-
-        padding: 6px !important;
-
-        overflow-x: auto !important;
-
-    }
-
-    /* 各ボタン */
-    div[data-testid="stHorizontalBlock"] ul li {
-
-        flex: 1 !important;
-
-        min-width: 80px !important;
-
-        max-width: 90px !important;
-
-        text-align: center !important;
-
-    }
-
-    /* ボタン本体 */
-    div[data-testid="stHorizontalBlock"] ul li a {
-
-        display: flex !important;
-
-        flex-direction: column !important;
-
-        align-items: center !important;
-
-        justify-content: center !important;
-
-        min-height: 58px !important;
-
-        padding: 8px 4px !important;
-
-        white-space: nowrap !important;
-
-        line-height: 1.1 !important;
-
-        font-size: 11px !important;
-
-    }
-
-    /* アイコン */
-    div[data-testid="stHorizontalBlock"] ul li a i {
-
-        font-size: 14px !important;
-
-        margin-bottom: 4px !important;
-
-    }
-
-    /* テキスト */
-    div[data-testid="stHorizontalBlock"] ul li a span {
-
-        font-size: 11px !important;
-
-        white-space: nowrap !important;
-
-        display: block !important;
-
-    }
-
 }
 
 </style>
@@ -451,9 +306,7 @@ if not st.session_state.logged_in:
 
         if selected_user == "職員を選択してください":
 
-            st.warning(
-                "職員を選択してください"
-            )
+            st.warning("職員を選択してください")
 
         else:
 
@@ -468,13 +321,9 @@ if not st.session_state.logged_in:
 
                 st.session_state.logged_in = True
 
-                st.session_state.user_name = (
-                    user_data["name"]
-                )
+                st.session_state.user_name = user_data["name"]
 
-                st.session_state.role = (
-                    user_data["role"]
-                )
+                st.session_state.role = user_data["role"]
 
                 st.rerun()
 
@@ -490,10 +339,6 @@ else:
         f"ログイン中：{st.session_state.user_name}"
     )
 
-    st.write(
-        f"権限：{st.session_state.role}"
-    )
-
     current_month = datetime.now().strftime(
         "%Y-%m"
     )
@@ -502,32 +347,18 @@ else:
     # 未読数
     # ====================================
 
-    if st.session_state.role == "leader":
-
-        unread_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM messages
-            WHERE target_user = 'leader'
-            AND is_read = 0
-            """,
-            conn
+    unread_df = pd.read_sql_query(
+        """
+        SELECT *
+        FROM messages
+        WHERE target_user = ?
+        AND is_read = 0
+        """,
+        conn,
+        params=(
+            st.session_state.user_name,
         )
-
-    else:
-
-        unread_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM messages
-            WHERE target_user = ?
-            AND is_read = 0
-            """,
-            conn,
-            params=(
-                st.session_state.user_name,
-            )
-        )
+    )
 
     unread_count = len(unread_df)
 
@@ -573,11 +404,14 @@ else:
             "people"
         ][:len(menu_options)],
 
-        default_index=0,
+        default_index=menu_options.index(
+            st.session_state.selected_menu
+        ),
 
         orientation="horizontal"
-
     )
+
+    st.session_state.selected_menu = selected
 
     # ====================================
     # ホーム
@@ -613,120 +447,380 @@ else:
                 f"{current_month} 未提出"
             )
 
-        st.divider()
-
     # ====================================
     # 入力
     # ====================================
 
     if selected == "入力":
 
-        st.subheader(
-            "重点項目入力"
-        )
+        edit_data = None
+
+        draft_data = None
+
+        if st.session_state.edit_draft_id:
+
+            draft_edit_df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM drafts
+                WHERE id = ?
+                """,
+                conn,
+                params=(
+                    st.session_state.edit_draft_id,
+                )
+            )
+
+            if len(draft_edit_df) > 0:
+
+                draft_data = (
+                    draft_edit_df.iloc[0]
+                )
+
+        if st.session_state.edit_entry_id:
+
+            edit_df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM entries
+                WHERE id = ?
+                """,
+                conn,
+                params=(
+                    st.session_state.edit_entry_id,
+                )
+            )
+
+            if len(edit_df) > 0:
+
+                edit_data = edit_df.iloc[0]
+
+        st.subheader("重点項目入力")
+
+        month_list = [
+            "2026-04",
+            "2026-05",
+            "2026-06"
+        ]
+
+        default_month = current_month
+
+        if "draft_month" in st.session_state:
+
+            default_month = (
+                st.session_state.draft_month
+            )
+
+        if edit_data is not None:
+
+            default_month = (
+                edit_data["month"]
+            )
 
         month = st.selectbox(
-            "対象月",
-            [
-                "2026-05",
-                "2026-06",
-                "2026-07"
-            ]
+            "月",
+            month_list,
+            index=month_list.index(
+                default_month
+            )
         )
 
         service1 = st.text_area(
-            "サービス①"
+            "サービス①",
+            value=(
+                edit_data["service1"]
+                if edit_data is not None
+                else (
+                    draft_data["service1"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
-
+        
         service2 = st.text_area(
-            "サービス②"
+            "サービス②",
+            value=(
+                edit_data["service2"]
+                if edit_data is not None
+                else (
+                    draft_data["service2"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
 
         income1 = st.text_area(
-            "収入①"
+            "収入①",
+            value=(
+                edit_data["income1"]
+                if edit_data is not None
+                else (
+                    draft_data["income1"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
-
         income2 = st.text_area(
-            "収入②"
+            "収入②",
+            value=(
+                edit_data["income2"]
+                if edit_data is not None
+                else (
+                    draft_data["income2"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
 
         expense1 = st.text_area(
-            "経費①"
+            "経費①",
+            value=(
+                edit_data["expense1"]
+                if edit_data is not None
+                else (
+                    draft_data["expense1"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
-
         expense2 = st.text_area(
-            "経費②"
+            "経費②",
+            value=(
+                edit_data["expense2"]
+                if edit_data is not None
+                else (
+                    draft_data["expense2"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
 
         time1 = st.text_area(
-            "時間①"
+            "時間①",
+            value=(
+                edit_data["time1"]
+                if edit_data is not None
+                else (
+                    draft_data["time1"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
-
         time2 = st.text_area(
-            "時間②"
+            "時間②",
+            value=(
+                edit_data["time2"]
+                if edit_data is not None
+                else (
+                    draft_data["time2"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
 
         proposal = st.text_area(
-            "管理者提案"
+            "管理者提案",
+            value=(
+                edit_data["proposal"]
+                if edit_data is not None
+                else (
+                    draft_data["proposal"]
+                    if draft_data is not None
+                    else ""
+                )
+            )
         )
 
-        if st.button("提出"):
+        col1, col2 = st.columns(2)
 
-            cursor.execute("""
-            INSERT INTO entries (
+        with col1:
 
-                user_name,
-                month,
+            if st.button("下書き保存"):
 
-                service1,
-                service2,
+                cursor.execute("""
+                DELETE FROM drafts
+                WHERE user_name = ?
+                AND month = ?
+                """,
+                (
+                    st.session_state.user_name,
+                    month
+                ))
 
-                income1,
-                income2,
+                cursor.execute("""
+                INSERT INTO drafts (
 
-                expense1,
-                expense2,
+                    user_name,
+                    month,
 
-                time1,
-                time2,
+                    service1,
+                    service2,
 
-                proposal,
+                    income1,
+                    income2,
 
-                created_at
+                    expense1,
+                    expense2,
 
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                st.session_state.user_name,
-                month,
+                    time1,
+                    time2,
 
-                service1,
-                service2,
+                    proposal,
 
-                income1,
-                income2,
+                    updated_at
 
-                expense1,
-                expense2,
-
-                time1,
-                time2,
-
-                proposal,
-
-                datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
                 )
-            ))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    st.session_state.user_name,
+                    month,
 
-            conn.commit()
+                    service1,
+                    service2,
 
-            st.success(
-                "提出しました"
-            )
+                    income1,
+                    income2,
 
-            st.rerun()
+                    expense1,
+                    expense2,
+
+                    time1,
+                    time2,
+
+                    proposal,
+
+                    datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                ))
+
+                conn.commit()
+
+                st.success("下書き保存しました")
+
+        with col2:
+
+            if st.button(
+                "提出",
+                key="submit_entry"
+            ):
+
+                try:
+
+                    if st.session_state.edit_entry_id:
+
+                        cursor.execute("""
+                        UPDATE entries
+                        SET
+
+                            service1 = ?,
+                            service2 = ?,
+
+                            income1 = ?,
+                            income2 = ?,
+
+                            expense1 = ?,
+                            expense2 = ?,
+
+                            time1 = ?,
+                            time2 = ?,
+
+                            proposal = ?
+
+                        WHERE id = ?
+                        """,
+                        (
+                            service1,
+                            service2,
+
+                            income1,
+                            income2,
+
+                            expense1,
+                            expense2,
+
+                            time1,
+                            time2,
+
+                            proposal,
+
+                            st.session_state.edit_entry_id
+                        ))
+
+                        conn.commit()
+
+                        st.session_state.edit_entry_id = None
+
+                        st.success("更新しました")
+
+                        st.rerun()
+
+                    cursor.execute("""
+                    INSERT INTO entries (
+
+                        user_name,
+                        month,
+
+                        service1,
+                        service2,
+
+                        income1,
+                        income2,
+
+                        expense1,
+                        expense2,
+
+                        time1,
+                        time2,
+
+                        proposal,
+
+                        created_at
+
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        st.session_state.user_name,
+                        month,
+
+                        service1,
+                        service2,
+
+                        income1,
+                        income2,
+
+                        expense1,
+                        expense2,
+
+                        time1,
+                        time2,
+
+                        proposal,
+
+                        datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    ))
+
+                    conn.commit()
+
+                    st.success("提出しました")
+
+                    st.write("保存成功")
+
+                except Exception as e:
+
+                    st.error(e)
 
     # ====================================
     # 職員連絡
@@ -734,32 +828,15 @@ else:
 
     if "連絡" in selected:
 
-        st.subheader(
-            "リーダーとの連絡"
-        )
-
-        cursor.execute("""
-        UPDATE messages
-        SET is_read = 1
-        WHERE target_user = ?
-        """,
-        (
-            st.session_state.user_name,
-        ))
-
-        conn.commit()
+        st.subheader("リーダーとの連絡")
 
         messages_df = pd.read_sql_query(
             """
             SELECT *
             FROM messages
-
             WHERE
-
             sender_name = ?
-
             OR
-
             target_user = ?
             ORDER BY id ASC
             """,
@@ -801,39 +878,35 @@ else:
 
         if st.button("送信"):
 
-            if message_input.strip() != "":
+            cursor.execute("""
+            INSERT INTO messages (
 
-                cursor.execute("""
-                INSERT INTO messages (
+                sender_name,
+                sender_role,
+                target_user,
+                month,
+                message,
+                is_read,
+                created_at
 
-                    sender_name,
-                    sender_role,
-                    target_user,
-                    message,
-                    is_read,
-                    created_at
-
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                st.session_state.user_name,
+                "staff",
+                "leader",
+                current_month,
+                message_input,
+                0,
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    st.session_state.user_name,
-                    "staff",
-                    "leader",
-                    message_input,
-                    0,
-                    datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                ))
+            ))
 
-                conn.commit()
+            conn.commit()
 
-                st.success(
-                    "送信しました"
-                )
-
-                st.rerun()
+            st.rerun()
 
     # ====================================
     # 履歴
@@ -842,6 +915,68 @@ else:
     if selected == "履歴":
 
         st.subheader("履歴")
+
+        draft_df = pd.read_sql_query(
+            """
+            SELECT *
+            FROM drafts
+            WHERE user_name = ?
+            ORDER BY updated_at DESC
+            """,
+            conn,
+            params=(
+                st.session_state.user_name,
+            )
+        )
+
+        if len(draft_df) > 0:
+
+            st.subheader("下書き")
+
+            for _, row in draft_df.iterrows():
+
+                st.warning(f"""
+        【下書き】
+        {row['month']}
+
+        【サービス】
+        ① {row['service1']}
+        ② {row['service2']}
+        """)
+
+                if st.button(
+                    "下書きを編集",
+                    key=f"draft_{row['id']}"
+                ):
+
+                    st.session_state.edit_entry_id = None
+
+                    st.session_state.edit_draft_id = (
+                        row["id"]
+                    )
+
+                    st.session_state.selected_menu = "入力"
+
+                    st.rerun()
+
+                    if st.button(
+                        "下書きを削除",
+                        key=f"delete_draft_{row['id']}"
+                    ):
+
+                        cursor.execute("""
+                        DELETE FROM drafts
+                        WHERE id = ?
+                        """,
+                        (
+                            row["id"],
+                        ))
+
+                        conn.commit()
+
+                        st.success("削除しました")
+
+                        st.rerun()
 
         history_df = pd.read_sql_query(
             """
@@ -856,60 +991,97 @@ else:
             )
         )
 
+        st.write(history_df)
+
         for _, row in history_df.iterrows():
 
-            st.markdown(f"""
-            <div class="chat-left">
+            st.info(f"""
+            【対象月】
+            {row['month']}
 
-            <h4>{row['month']}</h4>
+            【サービス】
+            ① {row['service1']}
+            ② {row['service2']}
 
-            <b>サービス</b><br>
-            ① {row['service1']}<br>
-            ② {row['service2']}<br><br>
+            【収入】
+            ① {row['income1']}
+            ② {row['income2']}
 
-            <b>収入</b><br>
-            ① {row['income1']}<br>
-            ② {row['income2']}<br><br>
+            【経費】
+            ① {row['expense1']}
+            ② {row['expense2']}
 
-            <b>経費</b><br>
-            ① {row['expense1']}<br>
-            ② {row['expense2']}<br><br>
+            【時間】
+            ① {row['time1']}
+            ② {row['time2']}
 
-            <b>時間</b><br>
-            ① {row['time1']}<br>
-            ② {row['time2']}<br><br>
-
-            <b>管理者提案</b><br>
+            【管理者提案】
             {row['proposal']}
+            """)
 
-            </div>
-            """,
-            unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                if st.button(
+                    "編集",
+                    key=f"edit_{row['id']}"
+                ):
+
+                    st.session_state.edit_entry_id = (
+                        row["id"]
+                    )
+
+                    st.session_state.selected_menu = (
+                        "入力"
+                    )
+
+                    st.rerun()
+
+            with col2:
+
+                if st.button(
+                    "削除",
+                    key=f"delete_{row['id']}"
+                ):
+
+                    cursor.execute("""
+                    DELETE FROM entries
+                    WHERE id = ?
+                    """,
+                    (
+                        row["id"],
+                    ))
+
+                    conn.commit()
+
+                    st.success(
+                        "削除しました"
+                    )
+
+                    st.rerun()
 
             st.divider()
 
     # ====================================
-    # 重点項目確認
+    # 確認
     # ====================================
 
     if (
-    selected == "確認"
-    and
-    st.session_state.role == "leader"
-    and
-    not st.session_state.selected_staff
-):
+        selected == "確認"
+        and
+        st.session_state.role == "leader"
+        and
+        not st.session_state.selected_staff
+    ):
 
-        st.subheader(
-            "重点項目確認"
-        )
+        st.subheader("重点項目確認")
 
         users_df = pd.read_sql_query(
             """
             SELECT *
             FROM users
             WHERE role = 'staff'
-            AND is_active = 1
             """,
             conn
         )
@@ -918,19 +1090,43 @@ else:
 
             staff_name = row["name"]
 
-            st.markdown(
-                f"### {staff_name}"
+            submit_check = pd.read_sql_query(
+                """
+                SELECT *
+                FROM entries
+                WHERE user_name = ?
+                AND month = ?
+                """,
+                conn,
+                params=(
+                    staff_name,
+                    current_month
+                )
             )
 
-            if st.button(
-                f"{staff_name}を開く",
-                key=f"open_{staff_name}"
-            ):
+            submitted = len(submit_check) > 0
 
+            if submitted:
+
+                st.success(
+                    f"{staff_name} ｜ {current_month} 提出済"
+                )
+
+            else:
+
+                st.warning(
+                    f"{staff_name} ｜ {current_month} 未提出"
+                )
+
+            if st.button(
+
+                f"{staff_name}を開く",
+                key=f"open_{staff_name}_{row['id']}"
+            ):
                 st.session_state.selected_staff = (
                     staff_name
                 )
-
+        
                 st.rerun()
 
     # ====================================
@@ -943,9 +1139,7 @@ else:
             st.session_state.selected_staff
         )
 
-        st.title(
-            f"{selected_staff}"
-        )
+        st.title(selected_staff)
 
         if st.button("← 戻る"):
 
@@ -953,79 +1147,75 @@ else:
 
             st.rerun()
 
-        st.divider()
-
-        # ====================================
-        # 最新重点項目
-        # ====================================
-
         entry_df = pd.read_sql_query(
             """
             SELECT *
             FROM entries
             WHERE user_name = ?
-            ORDER BY id DESC
-            LIMIT 1
+            ORDER BY month DESC
             """,
             conn,
             params=(selected_staff,)
         )
+           
+        st.subheader("提出内容")
 
-        if len(entry_df) > 0:
-
-            latest = entry_df.iloc[0]
-
-            st.subheader("サービス")
-
-            st.info(
-                f"① {latest['service1']}"
+        latest_entry_df = pd.read_sql_query(
+            """
+            SELECT *
+            FROM entries
+            WHERE user_name = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            conn,
+            params=(
+                selected_staff,
             )
+        )
 
-            st.info(
-                f"② {latest['service2']}"
-            )
+        if len(latest_entry_df) > 0:
 
-            st.subheader("収入")
+            latest = latest_entry_df.iloc[0]
 
-            st.info(
-                f"① {latest['income1']}"
-            )
+            st.markdown(f"""
+            ### 【対象月】
+            {latest['month']}
+            """)
 
-            st.info(
-                f"② {latest['income2']}"
-            )
+            st.success(f"""
+            【サービス】
+            ① {latest['service1']}
 
-            st.subheader("経費")
+            ② {latest['service2']}
+            """)
 
-            st.info(
-                f"① {latest['expense1']}"
-            )
+            st.info(f"""
+            【収入】
+            ① {latest['income1']}
 
-            st.info(
-                f"② {latest['expense2']}"
-            )
+            ② {latest['income2']}
+            """)
 
-            st.subheader("時間")
+            st.warning(f"""
+            【経費】
+            ① {latest['expense1']}
 
-            st.info(
-                f"① {latest['time1']}"
-            )
+            ② {latest['expense2']}
+            """)
 
-            st.info(
-                f"② {latest['time2']}"
-            )
+            st.error(f"""
+            【時間】
+            ① {latest['time1']}
 
-        else:
+            ② {latest['time2']}
+            """)
 
-            st.warning(
-                "まだ提出されていません"
-            )
+            st.success(f"""
+            【管理者提案】
 
-        st.divider()
-
-        # ====================================
-        # チャット
-        # ====================================
+            {latest['proposal']}
+            """)
 
         st.subheader("チャット")
 
@@ -1077,39 +1267,35 @@ else:
 
         if st.button("送信"):
 
-            if reply_input.strip() != "":
+            cursor.execute("""
+            INSERT INTO messages (
 
-                cursor.execute("""
-                INSERT INTO messages (
+                sender_name,
+                sender_role,
+                target_user,
+                month,
+                message,
+                is_read,
+                created_at
 
-                    sender_name,
-                    sender_role,
-                    target_user,
-                    message,
-                    is_read,
-                    created_at
-
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                st.session_state.user_name,
+                "leader",
+                selected_staff,
+                current_month,
+                reply_input,
+                0,
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    st.session_state.user_name,
-                    "leader",
-                    selected_staff,
-                    reply_input,
-                    0,
-                    datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                ))
+            ))
 
-                conn.commit()
+            conn.commit()
 
-                st.success(
-                    "送信しました"
-                )
-
-                st.rerun()
+            st.rerun()
 
     # ====================================
     # 職員管理
@@ -1123,13 +1309,7 @@ else:
 
         st.subheader("職員管理")
 
-        st.divider()
-
-        st.markdown("### 職員追加")
-
-        new_name = st.text_input(
-            "名前"
-        )
+        new_name = st.text_input("名前")
 
         new_role = st.selectbox(
             "権限",
@@ -1141,118 +1321,116 @@ else:
 
         if st.button("追加"):
 
-            if new_name.strip() != "":
-
-                cursor.execute("""
-                INSERT INTO users (
-
-                    name,
-                    role,
-                    is_active
-
-                )
-                VALUES (?, ?, ?)
-                """,
-                (
-                    new_name,
-                    new_role,
-                    1
-                ))
-
-                conn.commit()
-
-                st.success(
-                    "追加しました"
-                )
-
-                st.rerun()
-
-        st.divider()
-
-        users_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM users
-            ORDER BY role DESC
-            """,
-            conn
-        )
-
-        st.markdown("### 職員一覧")
-
-        for _, row in users_df.iterrows():
-
-            user_id = row["id"]
-
-            name = row["name"]
-
-            role = row["role"]
-
-            is_active = row["is_active"]
-
-            if is_active == 1:
-
-                status = "在職"
-
-            else:
-
-                status = "停止"
-
-            col1, col2, col3 = st.columns(
-                [3,2,1]
+            cursor.execute("""
+            INSERT INTO users (
+                name,
+                role,
+                is_active
             )
+            VALUES (?, ?, ?)
+            """,
+            (
+                new_name,
+                new_role,
+                1
+            ))
 
-            with col1:
+            conn.commit()
 
-                st.write(name)
-
-            with col2:
-
-                st.write(
-                    f"{role} / {status}"
-                )
-
-            with col3:
-
-                if is_active == 1:
-
-                    if st.button(
-                        "停止",
-                        key=f"stop_{user_id}"
-                    ):
-
-                        cursor.execute("""
-                        UPDATE users
-                        SET is_active = 0
-                        WHERE id = ?
-                        """,
-                        (user_id,)
-                        )
-
-                        conn.commit()
-
-                        st.rerun()
-
-                else:
-
-                    if st.button(
-                        "復帰",
-                        key=f"back_{user_id}"
-                    ):
-
-                        cursor.execute("""
-                        UPDATE users
-                        SET is_active = 1
-                        WHERE id = ?
-                        """,
-                        (user_id,)
-                        )
-
-                        conn.commit()
-
-                        st.rerun()
+            st.rerun()
 
             st.divider()
+
+            users_df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM users
+                ORDER BY role DESC
+                """,
+                conn
+            )
+
+            st.subheader("職員一覧")
+
+            for _, row in users_df.iterrows():
+
+                col1, col2, col3 = st.columns([3,2,1])
+
+                with col1:
+                    st.write(row["name"])
+
+                with col2:
+
+                    status = "在職"
+
+                    if row["is_active"] == 0:
+                        status = "停止"
+
+                    st.write(
+                        f"{row['role']} / {status}"
+                    )
+
+                with col3:
+
+                    if row["is_active"] == 1:
+
+                        if st.button(
+                            "停止",
+                            key=f"stop_{row['id']}"
+                        ):
+
+                            cursor.execute("""
+                            UPDATE users
+                            SET is_active = 0
+                            WHERE id = ?
+                            """,
+                            (
+                                row["id"],
+                            ))
+
+                            conn.commit()
+
+                            st.rerun()
+
+                    else:
+
+                        if st.button(
+                            "復帰",
+                            key=f"back_{row['id']}"
+                        ):
+
+                            cursor.execute("""
+                            UPDATE users
+                            SET is_active = 1
+                            WHERE id = ?
+                            """,
+                            (
+                                row["id"],
+                            ))
+
+                            conn.commit()
+
+                            st.rerun()
+
+            st.divider()
+
+            cursor.execute("""
+            INSERT INTO users (
+                name,
+                role,
+                is_active
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                new_name,
+                new_role,
+                1
+            ))
+
+            conn.commit()
+
+            st.rerun()
 
     # ====================================
     # ログアウト
