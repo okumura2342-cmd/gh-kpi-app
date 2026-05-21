@@ -415,6 +415,7 @@ else:
             "入力",
             "履歴",
             "確認",
+            "集計",
             "管理"
         ]
 
@@ -443,9 +444,9 @@ else:
             "clipboard-check",
             "chat-dots",
             "clock-history",
+            "bar-chart",
             "people"
         ][:len(menu_options)],
-
         default_index=menu_options.index(
             st.session_state.selected_menu
         ),
@@ -1428,6 +1429,83 @@ else:
             conn.commit()
 
             st.rerun()
+
+    # ====================================
+    # 集計
+    # ====================================
+
+    if (
+        selected == "集計"
+        and
+        st.session_state.role == "leader"
+    ):
+
+        st.subheader("重点項目集計")
+
+        summary_df = pd.read_sql_query(
+            """
+            SELECT *
+            FROM entries
+            WHERE month = ?
+            ORDER BY user_name
+            """,
+            conn,
+            params=(current_month,)
+        )
+
+        if len(summary_df) == 0:
+
+            st.warning("提出データがありません")
+
+        else:
+
+            st.markdown("## サービスの質")
+
+            for _, row in summary_df.iterrows():
+
+                st.success(f"""
+    【{row['user_name']}】
+
+    ① {row['service1']}
+
+    ② {row['service2']}
+    """)
+
+            st.markdown("## 収入")
+
+            for _, row in summary_df.iterrows():
+
+                st.info(f"""
+    【{row['user_name']}】
+
+    ① {row['income1']}
+
+    ② {row['income2']}
+    """)
+
+            st.markdown("## 経費")
+
+            for _, row in summary_df.iterrows():
+
+                st.warning(f"""
+    【{row['user_name']}】
+
+    ① {row['expense1']}
+
+    ② {row['expense2']}
+    """)
+
+            st.markdown("## 時間")
+
+            for _, row in summary_df.iterrows():
+
+                st.error(f"""
+    【{row['user_name']}】
+
+    ① {row['time1']}
+
+    ② {row['time2']}
+    """)
 
     # ====================================
     # 職員管理
