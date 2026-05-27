@@ -630,11 +630,16 @@ else:
 
         st.subheader("重点項目入力")
 
-        month_list = [
-            "2026-04",
-            "2026-05",
-            "2026-06"
-        ]
+        month_list = []
+
+        for i in range(12):
+
+            month_value = (
+                pd.Timestamp.now()
+                - pd.DateOffset(months=i)
+            ).strftime("%Y-%m")
+
+            month_list.append(month_value)
 
         default_month = current_month
 
@@ -896,6 +901,8 @@ else:
                         st.success("更新しました")
 
                         st.rerun()
+
+                        return
 
                     cursor.execute("""
                     INSERT INTO entries (
