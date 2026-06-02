@@ -1,6 +1,10 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
+import gspread
+
+from oauth2client.service_account import (
+    ServiceAccountCredentials
+)
 
 from datetime import datetime
 
@@ -16,159 +20,122 @@ st.set_page_config(
 )
 
 # ====================================
-# DB接続
+# Google Sheets接続
 # ====================================
 
-conn = sqlite3.connect(
-    "care.db",
-    check_same_thread=False
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds = ServiceAccountCredentials.from_json_keyfile_dict(
+    st.secrets,
+    scope
 )
 
-cursor = conn.cursor()
+client = gspread.authorize(creds)
 
-# ====================================
-# users テーブル
-# ====================================
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    name TEXT,
-
-    role TEXT,
-
-    is_active INTEGER DEFAULT 1
-
-)
-""")
-
-# ====================================
-# entries テーブル
-# ====================================
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS entries (
-
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    user_name TEXT,
-
-    month TEXT,
-
-    service1 TEXT,
-    service2 TEXT,
-
-    income1 TEXT,
-    income2 TEXT,
-
-    expense1 TEXT,
-    expense2 TEXT,
-
-    time1 TEXT,
-    time2 TEXT,
-
-    proposal TEXT,
-
-    created_at TEXT
-
-)
-""")
-
-# ====================================
-# drafts テーブル
-# ====================================
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS drafts (
-
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    user_name TEXT,
-
-    month TEXT,
-
-    service1 TEXT,
-    service2 TEXT,
-
-    income1 TEXT,
-    income2 TEXT,
-
-    expense1 TEXT,
-    expense2 TEXT,
-
-    time1 TEXT,
-    time2 TEXT,
-
-    proposal TEXT,
-
-    updated_at TEXT
-
-)
-""")
-
-# ====================================
-# messages テーブル
-# ====================================
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS messages (
-
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    sender_name TEXT,
-
-    sender_role TEXT,
-
-    target_user TEXT,
-
-    month TEXT,
-
-    message TEXT,
-
-    is_read INTEGER DEFAULT 0,
-
-    created_at TEXT
-
-)
-""")
-
-conn.commit()
-
-# ====================================
-# 初期ユーザー
-# ====================================
-
-cursor.execute(
-    "SELECT COUNT(*) FROM users"
+spreadsheet = client.open(
+    "GH重点項目管理DB"
 )
 
-count = cursor.fetchone()[0]
+users_sheet = spreadsheet.worksheet("users")
+entries_sheet = spreadsheet.worksheet("entries")
+drafts_sheet = spreadsheet.worksheet("drafts")
+messages_sheet = spreadsheet.worksheet("messages")
 
-if count == 0:
+# ====================================
+# DataFrame取得関数
+# ====================================
 
-    users = [
+def get_users_df():
 
-        ("奥村", "leader", 1)
+    data = users_sheet.get_all_records()
 
-    ]
-
-    cursor.executemany(
-        """
-        INSERT INTO users (
-
-            name,
-            role,
-            is_active
-
+    if len(data) == 0:
+        return pd.DataFrame(
+            columns=[
+                "id",
+                "name",
+                "role",
+                "is_active"
+            ]
         )
-        VALUES (?, ?, ?)
-        """,
-        users
-    )
 
-    conn.commit()
+    return pd.DataFrame(data)
+
+
+def get_entries_df():
+
+    data = entries_sheet.get_all_records()
+
+    if len(data) == 0:
+        return pd.DataFrame(
+            columns=[
+                "id",
+                "user_name",
+                "month",
+                "service1",
+                "service2",
+                "income1",
+                "income2",
+                "expense1",
+                "expense2",
+                "time1",
+                "time2",
+                "proposal",
+                "created_at"
+            ]
+        )
+
+    return pd.DataFrame(data)
+
+
+def get_drafts_df():
+
+    data = drafts_sheet.get_all_records()
+
+    if len(data) == 0:
+        return pd.DataFrame(
+            columns=[
+                "id",
+                "user_name",
+                "month",
+                "service1",
+                "service2",
+                "income1",
+                "income2",
+                "expense1",
+                "expense2",
+                "time1",
+                "time2",
+                "proposal",
+                "updated_at"
+            ]
+        )
+
+    return pd.DataFrame(data)
+
+
+def get_messages_df():
+
+    data = messages_sheet.get_all_records()
+
+    if len(data) == 0:
+        return pd.DataFrame(
+            columns=[
+                "id",
+                "sender_name",
+                "sender_role",
+                "target_user",
+                "month",
+                "message",
+                "is_read",
+                "created_at"
+            ]
+        )
+
+    return pd.DataFrame(data)
 
 # ====================================
 # session_state
@@ -195,6 +162,9 @@ if "edit_draft_id" not in st.session_state:
 if "selected_menu" not in st.session_state:
     st.session_state.selected_menu = "個人"
 
+if "force_input" not in st.session_state:
+    st.session_state.force_input = False
+
 # ====================================
 # CSS
 # ====================================
@@ -207,32 +177,6 @@ st.markdown("""
     color: #f8fafc;
 }
 
-.main .block-container {
-    max-width: 950px;
-    padding-top: 2rem;
-}
-
-h1,h2,h3,p,label,div {
-    color: #f8fafc;
-}
-
-.nav {
-    background-color: #1e1e2f !important;
-    border-radius: 14px;
-    padding: 8px;
-}
-
-.nav-link {
-    border-radius: 12px !important;
-    color: #f8fafc !important;
-    font-weight: 600 !important;
-}
-
-.nav-link.active {
-    background-color: #ff4b4b !important;
-    color: white !important;
-}
-
 .stButton > button {
     width: 100%;
     border-radius: 12px;
@@ -241,20 +185,6 @@ h1,h2,h3,p,label,div {
     color: white;
     font-weight: 700;
     padding: 12px;
-}
-
-.stTextArea textarea {
-    background-color: #111827;
-    color: white;
-    border-radius: 12px;
-    border: 1px solid #374151;
-}
-
-.stSelectbox > div > div {
-    background-color: #111827;
-    color: white;
-    border-radius: 12px;
-    border: 1px solid #374151;
 }
 
 .chat-left {
@@ -276,25 +206,23 @@ h1,h2,h3,p,label,div {
 }
 
 </style>
-""",
-unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ====================================
-# ログイン画面
+# ログイン
 # ====================================
 
 if not st.session_state.logged_in:
 
     st.title("ログイン")
 
-    users_df = pd.read_sql_query(
-        """
-        SELECT *
-        FROM users
-        WHERE is_active = 1
-        """,
-        conn
-    )
+    users_df = get_users_df()
+
+    if len(users_df) > 0:
+
+        users_df = users_df[
+            users_df["is_active"] == 1
+        ]
 
     user_options = [
         "職員を選択してください"
@@ -314,8 +242,7 @@ if not st.session_state.logged_in:
         else:
 
             selected_df = users_df[
-                users_df["name"]
-                == selected_user
+                users_df["name"] == selected_user
             ]
 
             if len(selected_df) > 0:
@@ -323,51 +250,10 @@ if not st.session_state.logged_in:
                 user_data = selected_df.iloc[0]
 
                 st.session_state.logged_in = True
-
                 st.session_state.user_name = user_data["name"]
-
                 st.session_state.role = user_data["role"]
 
                 st.rerun()
-
-            st.divider()
-
-            st.markdown("""
-            <div style="
-            background-color:#1e293b;
-            padding:20px;
-            border-radius:18px;
-            margin-top:10px;
-            border:1px solid #334155;
-            ">
-
-            <h3 style="color:#f8fafc;">
-            📢 アップデート情報
-            </h3>
-
-            <div style="
-            color:#cbd5e1;
-            line-height:1.8;
-            font-size:15px;
-            ">
-
-            🆕 下書き編集機能を追加しました<br>
-
-            🆕 リーダーチャット機能改善<br>
-
-            🆕 提出状況確認機能追加<br>
-
-            🆕 スマホUI改善<br>
-
-            🛠 不具合修正・安定化対応
-
-            </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True)
-
-            st.caption("Version 1.3.0")
 
 # ====================================
 # ログイン後
@@ -375,38 +261,21 @@ if not st.session_state.logged_in:
 
 else:
 
-    st.title("重点項目管理")
-
-    st.write(
-        f"ログイン中：{st.session_state.user_name}"
-    )
-
     current_month = datetime.now().strftime(
         "%Y-%m"
     )
 
-    # ====================================
-    # 未読数
-    # ====================================
+    st.title("重点項目管理")
 
-    unread_df = pd.read_sql_query(
-        """
-        SELECT *
-        FROM messages
-        WHERE target_user = ?
-        AND is_read = 0
-        """,
-        conn,
-        params=(
-            st.session_state.user_name,
-        )
-    )
+    messages_df = get_messages_df()
+
+    unread_df = messages_df[
+        (messages_df["target_user"] == st.session_state.user_name)
+        &
+        (messages_df["is_read"] == 0)
+    ]
 
     unread_count = len(unread_df)
-
-    # ====================================
-    # メニュー
-    # ====================================
 
     if st.session_state.role == "leader":
 
@@ -433,25 +302,22 @@ else:
             "履歴"
         ]
 
+    default_menu = st.session_state.get(
+        "selected_menu",
+        "個人"
+    )
+
+    if st.session_state.force_input:
+
+        default_menu = "入力"
+
+        st.session_state.force_input = False
+
     selected = option_menu(
-
         menu_title=None,
-
         options=menu_options,
-
-        icons=[
-            "house-door",
-            "clipboard-check",
-            "chat-dots",
-            "clock-history",
-            "bar-chart",
-            "people"
-        ][:len(menu_options)],
-        default_index=menu_options.index(
-            st.session_state.selected_menu
-        ),
-
-        orientation="horizontal"
+        orientation="horizontal",
+        default_index=menu_options.index(default_menu)
     )
 
     st.session_state.selected_menu = selected
@@ -464,121 +330,18 @@ else:
 
         st.subheader("ホーム")
 
-        st.markdown("""
-        <style>
+        entries_df = get_entries_df()
 
-        .manual-card {
-
-            background-color: #1e293b;
-
-            padding: 20px;
-
-            border-radius: 18px;
-
-            margin-bottom: 18px;
-
-            border: 1px solid #334155;
-
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-
-        }
-
-        .manual-title {
-
-            font-size: 22px;
-
-            font-weight: bold;
-
-            margin-bottom: 12px;
-
-            color: #f8fafc;
-
-        }
-
-        .manual-text {
-
-            font-size: 15px;
-
-            line-height: 1.8;
-
-            color: #cbd5e1;
-
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True)
-
-        with st.expander("📖 使い方マニュアル"):
-
-            st.markdown("## 🏠 ホーム")
-            st.info("""
-        ・今月の提出状況を確認できます
-        ・未提出 / 提出済 が表示されます
-        """)
-
-            st.markdown("## ✍ 入力")
-            st.success("""
-        ・重点項目を入力します
-        ・下書き保存可能
-        ・提出後は履歴へ保存されます
-        ・提出後も編集可能
-        """)
-
-            st.markdown("## 🕘 履歴")
-            st.warning("""
-        ・過去提出内容を確認できます
-        ・編集、削除可能
-        ・下書きも表示されます
-        """)
-
-            st.markdown("## 💬 連絡")
-            st.info("""
-        ・リーダーへチャット送信できます
-        ・既読/未読確認できます
-        """)
-
-            if st.session_state.role == "leader":
-
-                st.markdown("## 👀 確認")
-                st.error("""
-        ・職員の提出状況確認
-        ・重点項目確認
-        ・個別チャット
-        """)
-
-                st.markdown("## 👥 管理")
-                st.success("""
-        ・職員追加
-        ・停止 / 復帰
-        ・権限管理
-        """)
-
-        submitted_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM entries
-            WHERE user_name = ?
-            AND month = ?
-            """,
-            conn,
-            params=(
-                st.session_state.user_name,
-                current_month
-            )
-        )
+        submitted_df = entries_df[
+            (entries_df["user_name"] == st.session_state.user_name)
+            &
+            (entries_df["month"] == current_month)
+        ]
 
         if len(submitted_df) > 0:
-
-            st.success(
-                f"{current_month} 提出済"
-            )
-
+            st.success(f"{current_month} 提出済")
         else:
-
-            st.warning(
-                f"{current_month} 未提出"
-            )
+            st.warning(f"{current_month} 未提出")
 
     # ====================================
     # 入力
@@ -588,41 +351,17 @@ else:
 
         edit_data = None
 
-        draft_data = None
-
-        if st.session_state.edit_draft_id:
-
-            draft_edit_df = pd.read_sql_query(
-                """
-                SELECT *
-                FROM drafts
-                WHERE id = ?
-                """,
-                conn,
-                params=(
-                    st.session_state.edit_draft_id,
-                )
-            )
-
-            if len(draft_edit_df) > 0:
-
-                draft_data = (
-                    draft_edit_df.iloc[0]
-                )
-
         if st.session_state.edit_entry_id:
 
-            edit_df = pd.read_sql_query(
-                """
-                SELECT *
-                FROM entries
-                WHERE id = ?
-                """,
-                conn,
-                params=(
-                    st.session_state.edit_entry_id,
+            entries_df = get_entries_df()
+
+            edit_df = entries_df[
+                entries_df["id"].astype(str)
+                ==
+                str(
+                    st.session_state.edit_entry_id
                 )
-            )
+            ]
 
             if len(edit_df) > 0:
 
@@ -630,37 +369,9 @@ else:
 
         st.subheader("重点項目入力")
 
-        month_list = []
-
-        for i in range(12):
-
-            month_value = (
-                pd.Timestamp.now()
-                - pd.DateOffset(months=i)
-            ).strftime("%Y-%m")
-
-            month_list.append(month_value)
-
-        default_month = current_month
-
-        if "draft_month" in st.session_state:
-
-            default_month = (
-                st.session_state.draft_month
-            )
-
-        if edit_data is not None:
-
-            default_month = (
-                edit_data["month"]
-            )
-
         month = st.selectbox(
             "月",
-            month_list,
-            index=month_list.index(
-                default_month
-            )
+            [current_month]
         )
 
         service1 = st.text_area(
@@ -668,24 +379,15 @@ else:
             value=(
                 edit_data["service1"]
                 if edit_data is not None
-                else (
-                    draft_data["service1"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
-        
         service2 = st.text_area(
             "サービス②",
             value=(
                 edit_data["service2"]
                 if edit_data is not None
-                else (
-                    draft_data["service2"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
 
@@ -694,11 +396,7 @@ else:
             value=(
                 edit_data["income1"]
                 if edit_data is not None
-                else (
-                    draft_data["income1"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
         income2 = st.text_area(
@@ -706,11 +404,7 @@ else:
             value=(
                 edit_data["income2"]
                 if edit_data is not None
-                else (
-                    draft_data["income2"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
 
@@ -719,11 +413,7 @@ else:
             value=(
                 edit_data["expense1"]
                 if edit_data is not None
-                else (
-                    draft_data["expense1"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
         expense2 = st.text_area(
@@ -731,11 +421,7 @@ else:
             value=(
                 edit_data["expense2"]
                 if edit_data is not None
-                else (
-                    draft_data["expense2"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
 
@@ -744,11 +430,7 @@ else:
             value=(
                 edit_data["time1"]
                 if edit_data is not None
-                else (
-                    draft_data["time1"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
         time2 = st.text_area(
@@ -756,11 +438,7 @@ else:
             value=(
                 edit_data["time2"]
                 if edit_data is not None
-                else (
-                    draft_data["time2"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
 
@@ -769,114 +447,57 @@ else:
             value=(
                 edit_data["proposal"]
                 if edit_data is not None
-                else (
-                    draft_data["proposal"]
-                    if draft_data is not None
-                    else ""
-                )
+                else ""
             )
         )
 
         col1, col2 = st.columns(2)
 
+        # 下書き
         with col1:
 
             if st.button("下書き保存"):
 
-                cursor.execute("""
-                DELETE FROM drafts
-                WHERE user_name = ?
-                AND month = ?
-                """,
-                (
-                    st.session_state.user_name,
-                    month
-                ))
+                draft_id = str(datetime.now().timestamp())
 
-                cursor.execute("""
-                INSERT INTO drafts (
-
-                    user_name,
-                    month,
-
-                    service1,
-                    service2,
-
-                    income1,
-                    income2,
-
-                    expense1,
-                    expense2,
-
-                    time1,
-                    time2,
-
-                    proposal,
-
-                    updated_at
-
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
+                drafts_sheet.append_row([
+                    draft_id,
                     st.session_state.user_name,
                     month,
-
                     service1,
                     service2,
-
                     income1,
                     income2,
-
                     expense1,
                     expense2,
-
                     time1,
                     time2,
-
                     proposal,
-
                     datetime.now().strftime(
                         "%Y-%m-%d %H:%M:%S"
                     )
-                ))
-
-                conn.commit()
+                ])
 
                 st.success("下書き保存しました")
 
+        # 提出
         with col2:
 
-            if st.button(
-                "提出",
-                key="submit_entry"
-            ):
+            if st.button("提出"):
 
-                try:
+                if st.session_state.edit_entry_id:
 
-                    if st.session_state.edit_entry_id:
+                    cell = entries_sheet.find(
+                        str(
+                            st.session_state.edit_entry_id
+                        )
+                    )
 
-                        cursor.execute("""
-                        UPDATE entries
-                        SET
+                    row_num = cell.row
 
-                            service1 = ?,
-                            service2 = ?,
-
-                            income1 = ?,
-                            income2 = ?,
-
-                            expense1 = ?,
-                            expense2 = ?,
-
-                            time1 = ?,
-                            time2 = ?,
-
-                            proposal = ?
-
-                        WHERE id = ?
-                        """,
-                        (
+                    entries_sheet.update(
+                        f"D{row_num}:L{row_num}",
+                        [[
                             service1,
                             service2,
 
@@ -889,105 +510,59 @@ else:
                             time1,
                             time2,
 
-                            proposal,
-
-                            st.session_state.edit_entry_id
-                        ))
-
-                        conn.commit()
-
-                        st.session_state.edit_entry_id = None
-
-                        st.success("更新しました")
-
-                        st.rerun()
-
-                        return
-
-                    cursor.execute("""
-                    INSERT INTO entries (
-
-                        user_name,
-                        month,
-
-                        service1,
-                        service2,
-
-                        income1,
-                        income2,
-
-                        expense1,
-                        expense2,
-
-                        time1,
-                        time2,
-
-                        proposal,
-
-                        created_at
-
+                            proposal
+                        ]]
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
+
+                    st.success("更新しました")
+
+                    st.session_state.edit_entry_id = None
+
+                    st.rerun()
+
+                else:
+
+                    entry_id = str(datetime.now().timestamp())
+
+                    entries_sheet.append_row([
+                        entry_id,
                         st.session_state.user_name,
                         month,
-
                         service1,
                         service2,
-
                         income1,
                         income2,
-
                         expense1,
                         expense2,
-
                         time1,
                         time2,
-
                         proposal,
-
                         datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
                         )
-                    ))
-
-                    conn.commit()
+                    ])
 
                     st.success("提出しました")
 
-                    st.write("保存成功")
-
-                except Exception as e:
-
-                    st.error(e)
+                    st.rerun()
 
     # ====================================
-    # 職員連絡
+    # 連絡
     # ====================================
 
     if "連絡" in selected:
 
         st.subheader("リーダーとの連絡")
 
-        messages_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM messages
-            WHERE
-            sender_name = ?
-            OR
-            target_user = ?
-            ORDER BY id ASC
-            """,
-            conn,
-            params=(
-                st.session_state.user_name,
-                st.session_state.user_name
-            )
-        )
+        messages_df = get_messages_df()
 
-        for _, row in messages_df.iterrows():
+        chat_df = messages_df[
+            (messages_df["sender_name"] == st.session_state.user_name)
+            |
+            (messages_df["target_user"] == st.session_state.user_name)
+        ]
+
+        for _, row in chat_df.iterrows():
 
             is_me = (
                 row["sender_name"]
@@ -1000,8 +575,7 @@ else:
                 <div class="chat-right">
                 {row['message']}
                 </div>
-                """,
-                unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
             else:
 
@@ -1009,30 +583,16 @@ else:
                 <div class="chat-left">
                 {row['message']}
                 </div>
-                """,
-                unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-        message_input = st.text_area(
-            "メッセージ"
-        )
+        message_input = st.text_area("メッセージ")
 
         if st.button("送信"):
 
-            cursor.execute("""
-            INSERT INTO messages (
+            message_id = str(datetime.now().timestamp())
 
-                sender_name,
-                sender_role,
-                target_user,
-                month,
-                message,
-                is_read,
-                created_at
-
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
+            messages_sheet.append_row([
+                message_id,
                 st.session_state.user_name,
                 "staff",
                 "leader",
@@ -1042,9 +602,7 @@ else:
                 datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
-            ))
-
-            conn.commit()
+            ])
 
             st.rerun()
 
@@ -1056,386 +614,49 @@ else:
 
         st.subheader("履歴")
 
-        draft_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM drafts
-            WHERE user_name = ?
-            ORDER BY updated_at DESC
-            """,
-            conn,
-            params=(
-                st.session_state.user_name,
-            )
-        )
+        entries_df = get_entries_df()
 
-        if len(draft_df) > 0:
-
-            st.subheader("下書き")
-
-            for _, row in draft_df.iterrows():
-
-                st.warning(f"""
-        【下書き】
-        {row['month']}
-
-        【サービス】
-        ① {row['service1']}
-        ② {row['service2']}
-        """)
-
-                if st.button(
-                    "下書きを編集",
-                    key=f"draft_{row['id']}"
-                ):
-
-                    st.session_state.edit_entry_id = None
-
-                    st.session_state.edit_draft_id = (
-                        row["id"]
-                    )
-
-                    st.session_state.selected_menu = "入力"
-
-                    st.rerun()
-
-                    if st.button(
-                        "下書きを削除",
-                        key=f"delete_draft_{row['id']}"
-                    ):
-
-                        cursor.execute("""
-                        DELETE FROM drafts
-                        WHERE id = ?
-                        """,
-                        (
-                            row["id"],
-                        ))
-
-                        conn.commit()
-
-                        st.success("削除しました")
-
-                        st.rerun()
-
-        history_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM entries
-            WHERE user_name = ?
-            ORDER BY month DESC
-            """,
-            conn,
-            params=(
-                st.session_state.user_name,
-            )
-        )
-
-        st.write(history_df)
+        history_df = entries_df[
+            entries_df["user_name"]
+            == st.session_state.user_name
+        ]
 
         for _, row in history_df.iterrows():
 
             st.info(f"""
-            【対象月】
-            {row['month']}
+【対象月】
+{row['month']}
 
-            【サービス】
-            ① {row['service1']}
-            ② {row['service2']}
+【サービス】
+① {row['service1']}
+② {row['service2']}
 
-            【収入】
-            ① {row['income1']}
-            ② {row['income2']}
+【収入】
+① {row['income1']}
+② {row['income2']}
 
-            【経費】
-            ① {row['expense1']}
-            ② {row['expense2']}
+【経費】
+① {row['expense1']}
+② {row['expense2']}
 
-            【時間】
-            ① {row['time1']}
-            ② {row['time2']}
+【時間】
+① {row['time1']}
+② {row['time2']}
 
-            【管理者提案】
-            {row['proposal']}
-            """)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-
-                if st.button(
-                    "編集",
-                    key=f"edit_{row['id']}"
-                ):
-
-                    st.session_state.edit_entry_id = (
-                        row["id"]
-                    )
-
-                    st.session_state.selected_menu = (
-                        "入力"
-                    )
-
-                    st.rerun()
-
-            with col2:
-
-                if st.button(
-                    "削除",
-                    key=f"delete_{row['id']}"
-                ):
-
-                    cursor.execute("""
-                    DELETE FROM entries
-                    WHERE id = ?
-                    """,
-                    (
-                        row["id"],
-                    ))
-
-                    conn.commit()
-
-                    st.success(
-                        "削除しました"
-                    )
-
-                    st.rerun()
-
-            st.divider()
-
-    # ====================================
-    # 確認
-    # ====================================
-
-    if (
-        selected == "確認"
-        and
-        st.session_state.role == "leader"
-        and
-        not st.session_state.selected_staff
-    ):
-
-        st.subheader("重点項目確認")
-
-        users_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM users
-            WHERE role = 'staff'
-            """,
-            conn
-        )
-
-        for _, row in users_df.iterrows():
-
-            staff_name = row["name"]
-
-            submit_check = pd.read_sql_query(
-                """
-                SELECT *
-                FROM entries
-                WHERE user_name = ?
-                AND month = ?
-                """,
-                conn,
-                params=(
-                    staff_name,
-                    current_month
-                )
-            )
-
-            submitted = len(submit_check) > 0
-
-            if submitted:
-
-                st.success(
-                    f"{staff_name} ｜ {current_month} 提出済"
-                )
-
-            else:
-
-                st.warning(
-                    f"{staff_name} ｜ {current_month} 未提出"
-                )
+【管理者提案】
+{row['proposal']}
+""")
 
             if st.button(
-
-                f"{staff_name}を開く",
-                key=f"open_{staff_name}_{row['id']}"
+                "編集",
+                key=f"edit_{row['id']}"
             ):
-                st.session_state.selected_staff = (
-                    staff_name
-                )
-        
+
+                st.session_state.edit_entry_id = row["id"]
+
+                st.session_state.force_input = True
+
                 st.rerun()
-
-    # ====================================
-    # 個別画面
-    # ====================================
-
-    if st.session_state.selected_staff:
-
-        selected_staff = (
-            st.session_state.selected_staff
-        )
-
-        st.title(selected_staff)
-
-        if st.button("← 戻る"):
-
-            st.session_state.selected_staff = None
-
-            st.rerun()
-
-        entry_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM entries
-            WHERE user_name = ?
-            ORDER BY month DESC
-            """,
-            conn,
-            params=(selected_staff,)
-        )
-           
-        st.subheader("提出内容")
-
-        latest_entry_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM entries
-            WHERE user_name = ?
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            conn,
-            params=(
-                selected_staff,
-            )
-        )
-
-        if len(latest_entry_df) > 0:
-
-            latest = latest_entry_df.iloc[0]
-
-            st.markdown(f"""
-            ### 【対象月】
-            {latest['month']}
-            """)
-
-            st.success(f"""
-            【サービス】
-            ① {latest['service1']}
-
-            ② {latest['service2']}
-            """)
-
-            st.info(f"""
-            【収入】
-            ① {latest['income1']}
-
-            ② {latest['income2']}
-            """)
-
-            st.warning(f"""
-            【経費】
-            ① {latest['expense1']}
-
-            ② {latest['expense2']}
-            """)
-
-            st.error(f"""
-            【時間】
-            ① {latest['time1']}
-
-            ② {latest['time2']}
-            """)
-
-            st.success(f"""
-            【管理者提案】
-
-            {latest['proposal']}
-            """)
-
-        st.subheader("チャット")
-
-        messages_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM messages
-            WHERE
-            sender_name = ?
-            OR
-            target_user = ?
-            ORDER BY id ASC
-            """,
-            conn,
-            params=(
-                selected_staff,
-                selected_staff
-            )
-        )
-
-        for _, row in messages_df.iterrows():
-
-            is_leader = (
-                row["sender_role"]
-                == "leader"
-            )
-
-            if is_leader:
-
-                st.markdown(f"""
-                <div class="chat-right">
-                {row['message']}
-                </div>
-                """,
-                unsafe_allow_html=True)
-
-            else:
-
-                st.markdown(f"""
-                <div class="chat-left">
-                {row['message']}
-                </div>
-                """,
-                unsafe_allow_html=True)
-
-        reply_input = st.text_area(
-            "メッセージ"
-        )
-
-        if st.button("送信"):
-
-            cursor.execute("""
-            INSERT INTO messages (
-
-                sender_name,
-                sender_role,
-                target_user,
-                month,
-                message,
-                is_read,
-                created_at
-
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                st.session_state.user_name,
-                "leader",
-                selected_staff,
-                current_month,
-                reply_input,
-                0,
-                datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-            ))
-
-            conn.commit()
-
-            st.rerun()
 
     # ====================================
     # 集計
@@ -1449,73 +670,25 @@ else:
 
         st.subheader("重点項目集計")
 
-        summary_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM entries
-            WHERE month = ?
-            ORDER BY user_name
-            """,
-            conn,
-            params=(current_month,)
-        )
+        entries_df = get_entries_df()
 
-        if len(summary_df) == 0:
+        summary_df = entries_df[
+            entries_df["month"] == current_month
+        ]
 
-            st.warning("提出データがありません")
+        st.markdown("## サービスの質")
 
-        else:
+        for _, row in summary_df.iterrows():
 
-            st.markdown("## サービスの質")
+            st.success(f"""
+【{row['user_name']}】
 
-            for _, row in summary_df.iterrows():
-
-                st.success(f"""
-    【{row['user_name']}】
-
-    ① {row['service1']}
-
-    ② {row['service2']}
-    """)
-
-            st.markdown("## 収入")
-
-            for _, row in summary_df.iterrows():
-
-                st.info(f"""
-    【{row['user_name']}】
-
-    ① {row['income1']}
-
-    ② {row['income2']}
-    """)
-
-            st.markdown("## 経費")
-
-            for _, row in summary_df.iterrows():
-
-                st.warning(f"""
-    【{row['user_name']}】
-
-    ① {row['expense1']}
-
-    ② {row['expense2']}
-    """)
-
-            st.markdown("## 時間")
-
-            for _, row in summary_df.iterrows():
-
-                st.error(f"""
-    【{row['user_name']}】
-
-    ① {row['time1']}
-
-    ② {row['time2']}
-    """)
+① {row['service1']}
+② {row['service2']}
+""")
 
     # ====================================
-    # 職員管理
+    # 管理
     # ====================================
 
     if (
@@ -1530,124 +703,31 @@ else:
 
         new_role = st.selectbox(
             "権限",
-            [
-                "staff",
-                "leader"
-            ]
+            ["staff", "leader"]
         )
 
         if st.button("追加"):
 
-            cursor.execute("""
-            INSERT INTO users (
-                name,
-                role,
-                is_active
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
+            user_id = str(datetime.now().timestamp())
+
+            users_sheet.append_row([
+                user_id,
                 new_name,
                 new_role,
                 1
-            ))
+            ])
 
-            conn.commit()
-
-            st.rerun()
-
-            st.divider()
-
-            users_df = pd.read_sql_query(
-                """
-                SELECT *
-                FROM users
-                ORDER BY role DESC
-                """,
-                conn
-            )
-
-            st.subheader("職員一覧")
-
-            for _, row in users_df.iterrows():
-
-                col1, col2, col3 = st.columns([3,2,1])
-
-                with col1:
-                    st.write(row["name"])
-
-                with col2:
-
-                    status = "在職"
-
-                    if row["is_active"] == 0:
-                        status = "停止"
-
-                    st.write(
-                        f"{row['role']} / {status}"
-                    )
-
-                with col3:
-
-                    if row["is_active"] == 1:
-
-                        if st.button(
-                            "停止",
-                            key=f"stop_{row['id']}"
-                        ):
-
-                            cursor.execute("""
-                            UPDATE users
-                            SET is_active = 0
-                            WHERE id = ?
-                            """,
-                            (
-                                row["id"],
-                            ))
-
-                            conn.commit()
-
-                            st.rerun()
-
-                    else:
-
-                        if st.button(
-                            "復帰",
-                            key=f"back_{row['id']}"
-                        ):
-
-                            cursor.execute("""
-                            UPDATE users
-                            SET is_active = 1
-                            WHERE id = ?
-                            """,
-                            (
-                                row["id"],
-                            ))
-
-                            conn.commit()
-
-                            st.rerun()
-
-            st.divider()
-
-            cursor.execute("""
-            INSERT INTO users (
-                name,
-                role,
-                is_active
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                new_name,
-                new_role,
-                1
-            ))
-
-            conn.commit()
+            st.success("追加しました")
 
             st.rerun()
+
+        users_df = get_users_df()
+
+        for _, row in users_df.iterrows():
+
+            st.write(
+                f"{row['name']} / {row['role']}"
+            )
 
     # ====================================
     # ログアウト
@@ -1658,11 +738,7 @@ else:
     if st.button("ログアウト"):
 
         st.session_state.logged_in = False
-
         st.session_state.user_name = ""
-
         st.session_state.role = ""
-
-        st.session_state.selected_staff = None
 
         st.rerun()
