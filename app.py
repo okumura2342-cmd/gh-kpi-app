@@ -1,9 +1,76 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import html
+from contextlib import contextmanager
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-from streamlit_option_menu import option_menu
+
+if not hasattr(st, "cache_data"):
+    st.cache_data = st.cache
+
+try:
+    from streamlit_option_menu import option_menu as streamlit_option_menu
+except ImportError:
+    streamlit_option_menu = None
+
+
+def option_menu(menu_title, options, orientation="horizontal", default_index=0, styles=None):
+    """streamlit-option-menu がない環境でもアプリを止めないための代替メニュー。"""
+    if streamlit_option_menu is not None:
+        return streamlit_option_menu(
+            menu_title=menu_title,
+            options=options,
+            orientation=orientation,
+            default_index=default_index,
+            styles=styles,
+        )
+
+    if orientation == "horizontal":
+        return st.radio(
+            menu_title or "メニュー",
+            options,
+            index=default_index,
+            horizontal=True,
+            label_visibility="collapsed" if menu_title is None else "visible",
+        )
+
+    return st.selectbox(
+        menu_title or "メニュー",
+        options,
+        index=default_index,
+        label_visibility="collapsed" if menu_title is None else "visible",
+    )
+
+
+def safe_int(value, default=0):
+    try:
+        if value is None or str(value).strip() == "":
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def esc(value):
+    return html.escape(str(value or ""), quote=True)
+
+
+@contextmanager
+def bordered_container():
+    try:
+        with st.container(border=True):
+            yield
+    except TypeError:
+        with st.container():
+            yield
+
+
+def sheet_update(ws, range_name, values):
+    try:
+        ws.update(range_name=range_name, values=values)
+    except TypeError:
+        ws.update(range_name, values)
 
 # ====================================
 # ページ設定
@@ -23,16 +90,18 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds = ServiceAccountCredentials.from_json_keyfile_dict(
-    st.secrets,
-    scope
-)
-
-client = gspread.authorize(creds)
 try:
+    credential_info = st.secrets.get("gcp_service_account", st.secrets)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        dict(credential_info),
+        scope
+    )
+    client = gspread.authorize(creds)
     spreadsheet = client.open("GH重点項目管理DB")
 except Exception as e:
-    st.error(str(e))
+    st.error("Google Sheets に接続できませんでした。")
+    st.caption("Streamlit の secrets にサービスアカウントJSONを設定し、スプレッドシート名と共有権限を確認してください。")
+    st.caption(str(e))
     st.stop()
 
 # ====================================
@@ -57,12 +126,12 @@ def get_or_create_worksheet(sheet_name, headers):
     else:
         first_row = values[0]
         if len(first_row) == 0 or all(str(x).strip() == "" for x in first_row):
-            ws.update("A1", [headers])
+            sheet_update(ws, "A1", [headers])
         else:
             # 足りない列があればヘッダを補完
             if len(first_row) < len(headers):
                 new_header = first_row + headers[len(first_row):]
-                ws.update("A1", [new_header])
+                sheet_update(ws, "A1", [new_header])
             else:
                 # 空ヘッダだけ補完
                 fixed = first_row[:]
@@ -75,7 +144,7 @@ def get_or_create_worksheet(sheet_name, headers):
                         fixed[i] = h
                         changed = True
                 if changed:
-                    ws.update("A1", [fixed])
+                    sheet_update(ws, "A1", [fixed])
 
     return ws
 
@@ -203,16 +272,11 @@ def get_users_df():
 
 @st.cache_data(ttl=30)
 def get_entries_df():
-
-    st.write("entries 読み込み")
     data = entries_sheet.get_all_records()
     return safe_df(data, ENTRIES_HEADERS)
 
 @st.cache_data(ttl=30)
 def get_settings_df():
-
-    st.write("settings 読み込み")
-
     data = settings_sheet.get_all_records()
 
     df = safe_df(data, SETTINGS_HEADERS)
@@ -233,12 +297,16 @@ def get_drafts_df():
 
 @st.cache_data(ttl=30)
 def get_messages_df():
-
-    st.write("messages 読み込み")
-
     data = messages_sheet.get_all_records()
+    df = safe_df(data, MESSAGES_HEADERS)
 
-    return safe_df(data, MESSAGES_HEADERS)
+    if len(df) > 0:
+        df["is_read"] = pd.to_numeric(
+            df["is_read"],
+            errors="coerce"
+        ).fillna(0).astype(int)
+
+    return df
 
 
 # ====================================
@@ -264,13 +332,13 @@ def get_user_icon(user_name):
     setting_row = settings_df[settings_df["user_name"] == user_name]
     if len(setting_row) > 0:
         row = setting_row.iloc[0]
-        if int(row.get("use_default_icon", 1)) == 0 and str(row.get("icon_url", "")).strip() != "":
+        if safe_int(row.get("use_default_icon", 1), 1) == 0 and str(row.get("icon_url", "")).strip() != "":
             return str(row["icon_url"])
 
     user_row = users_df[users_df["name"] == user_name]
     if len(user_row) > 0:
         row = user_row.iloc[0]
-        if int(row.get("use_default_icon", 1)) == 0 and str(row.get("icon_url", "")).strip() != "":
+        if safe_int(row.get("use_default_icon", 1), 1) == 0 and str(row.get("icon_url", "")).strip() != "":
             return str(row["icon_url"])
 
     return default_icon_url()
@@ -496,10 +564,10 @@ else:
     st.markdown(
         f'''
         <div class="user-mini">
-            <img src="{my_icon}">
+            <img src="{esc(my_icon)}">
             <div>
-                <div style="font-weight:700; color:#f8fafc;">{st.session_state.user_name}</div>
-                <div style="font-size:13px; color:#cbd5e1;">{role_label(st.session_state.role)}</div>
+                <div style="font-weight:700; color:#f8fafc;">{esc(st.session_state.user_name)}</div>
+                <div style="font-size:13px; color:#cbd5e1;">{esc(role_label(st.session_state.role))}</div>
             </div>
         </div>
         ''',
@@ -774,7 +842,8 @@ def save_draft_record(
     if existing is not None:
         row_num = find_row_number_by_id(drafts_sheet, existing["id"])
         if row_num:
-            drafts_sheet.update(
+            sheet_update(
+                drafts_sheet,
                 f"A{row_num}:M{row_num}",
                 values
             )
@@ -819,7 +888,8 @@ def submit_entry_record(
     if is_edit:
         row_num = find_row_number_by_id(entries_sheet, entry_id)
         if row_num:
-            entries_sheet.update(
+            sheet_update(
+                entries_sheet,
                 f"A{row_num}:N{row_num}",
                 values
             )
@@ -1054,7 +1124,7 @@ if st.session_state.logged_in:
             )
 
             for _, row in history_df.iterrows():
-                with st.container(border=True):
+                with bordered_container():
                     st.markdown(f"### {row['month']}")
                     st.write(f"**状態**: {row.get('status', '提出済み')}")
                     st.write(f"**作成日時**: {row['created_at']}")
@@ -1379,14 +1449,15 @@ def build_leader_confirm_rows(month):
     for _, user_row in staff_df.iterrows():
 
         staff_name = str(user_row["name"])
+        latest_message, latest_at = get_latest_room_message(staff_name, month)
 
         rows.append({
             "name": staff_name,
-            "status": "テスト",
-            "latest_message": "",
-            "latest_at": "",
-            "unread_count": 0,
-            "icon_url": default_icon_url()
+            "status": get_submit_status(staff_name, month),
+            "latest_message": latest_message,
+            "latest_at": latest_at,
+            "unread_count": get_room_unread_count(staff_name, st.session_state.user_name, month),
+            "icon_url": get_user_icon(staff_name)
         })
 
     return rows
@@ -1436,19 +1507,15 @@ def render_chat_block(room_user, month):
         row_class = "me" if is_me else "other"
         read_label = ""
 
-        try:
-            is_read_flag = int(row.get("is_read", 0))
-        except:
-            is_read_flag = 0
+        is_read_flag = safe_int(row.get("is_read", 0), 0)
 
         if is_me and is_read_flag == 1:
             read_label = '<span class="read-label">既読</span>'
 
-        msg = str(row.get("message", ""))
-        msg = msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        msg = esc(row.get("message", ""))
         msg = msg.replace("\n", "<br>")
 
-        created_at = str(row.get("created_at", ""))
+        created_at = esc(row.get("created_at", ""))
 
         if is_me:
             html_parts.append(
@@ -1465,9 +1532,9 @@ def render_chat_block(room_user, month):
             html_parts.append(
                 f'''
                 <div class="chat-row {row_class}">
-                    <img class="chat-icon" src="{icon_url}">
+                    <img class="chat-icon" src="{esc(icon_url)}">
                     <div>
-                        <div class="small-muted">{sender_name}</div>
+                        <div class="small-muted">{esc(sender_name)}</div>
                         <div class="chat-bubble {bubble_class}">{msg}</div>
                         <div class="chat-meta">{created_at}</div>
                     </div>
@@ -1536,35 +1603,36 @@ if st.session_state.logged_in:
             else:
                 for row in leader_rows:
                     status_badge = (
-                        f'<span class="badge-ok">{row["status"]}</span>'
+                        f'<span class="badge-ok">{esc(row["status"])}</span>'
                         if row["status"] == "提出済み"
-                        else f'<span class="badge-ng">{row["status"]}</span>'
+                        else f'<span class="badge-ng">{esc(row["status"])}</span>'
                     )
 
                     latest_text = row["latest_message"] if row["latest_message"] else "メッセージはまだありません"
                     unread_text = f'未読 {row["unread_count"]} 件' if row["unread_count"] > 0 else '未読なし'
+                    button_key_name = str(row["name"]).replace(" ", "_")
 
                     st.markdown(
                         f'''
                         <div class="room-card">
                             <div class="room-head">
                                 <div style="display:flex; align-items:center; gap:10px;">
-                                    <img src="{row['icon_url']}" style="width:44px;height:44px;border-radius:999px;object-fit:cover;border:1px solid #334155;">
+                                    <img src="{esc(row['icon_url'])}" style="width:44px;height:44px;border-radius:999px;object-fit:cover;border:1px solid #334155;">
                                     <div>
-                                        <div class="room-name">{row['name']}</div>
+                                        <div class="room-name">{esc(row['name'])}</div>
                                         <div class="room-sub">{status_badge}</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="room-sub">{unread_text}</div>
-                            <div class="room-sub">最新: {latest_text}</div>
-                            <div class="small-muted">{row['latest_at']}</div>
+                            <div class="room-sub">{esc(unread_text)}</div>
+                            <div class="room-sub">最新: {esc(latest_text)}</div>
+                            <div class="small-muted">{esc(row['latest_at'])}</div>
                         </div>
                         ''',
                         unsafe_allow_html=True
                     )
 
-                    if st.button(f"{row['name']} を確認する", key=f"part3_open_room_{row['name']}"):
+                    if st.button(f"{row['name']} を確認する", key=f"part3_open_room_{button_key_name}"):
                         st.session_state.selected_room_user = row["name"]
                         st.rerun()
 
@@ -1640,7 +1708,7 @@ def save_user_icon_setting(user_name, icon_url, use_default_icon):
 
     setting_row = find_setting_row_by_name(user_name)
     if setting_row:
-        settings_sheet.update(f"A{setting_row}:E{setting_row}", setting_values)
+        sheet_update(settings_sheet, f"A{setting_row}:E{setting_row}", setting_values)
     else:
         settings_sheet.append_row(setting_values[0])
 
@@ -1650,7 +1718,7 @@ def save_user_icon_setting(user_name, icon_url, use_default_icon):
         current = current + [""] * (7 - len(current))
         current[4] = icon_url
         current[5] = str(use_default_flag)
-        users_sheet.update(f"A{user_row}:G{user_row}", [current[:7]])
+        sheet_update(users_sheet, f"A{user_row}:G{user_row}", [current[:7]])
 
 
 def get_next_user_id():
@@ -1694,7 +1762,7 @@ def set_user_active_flag(user_name, is_active):
     current = users_sheet.row_values(row_num)
     current = current + [""] * (7 - len(current))
     current[3] = "1" if is_active else "0"
-    users_sheet.update(f"A{row_num}:G{row_num}", [current[:7]])
+    sheet_update(users_sheet, f"A{row_num}:G{row_num}", [current[:7]])
     return True, "在籍状態を更新しました"
 
 
@@ -1791,14 +1859,14 @@ if st.session_state.logged_in:
         if len(current_setting) > 0:
             row = current_setting.iloc[0]
             current_custom_url = str(row.get("icon_url", "") or "")
-            current_use_default = int(row.get("use_default_icon", 1)) == 1
+            current_use_default = safe_int(row.get("use_default_icon", 1), 1) == 1
         else:
             users_df = get_users_df()
             me_df = users_df[users_df["name"] == st.session_state.user_name]
             if len(me_df) > 0:
                 me = me_df.iloc[0]
                 current_custom_url = str(me.get("icon_url", "") or "")
-                current_use_default = int(me.get("use_default_icon", 1)) == 1
+                current_use_default = safe_int(me.get("use_default_icon", 1), 1) == 1
 
         st.markdown("#### アイコン設定")
         st.image(current_icon, width=96)
@@ -1866,18 +1934,19 @@ if st.session_state.logged_in:
             for _, row in users_df.iterrows():
                 user_name = str(row["name"])
                 role_text = role_label(str(row["role"]))
-                active_text = "在籍" if int(row.get("is_active", 1)) == 1 else "退職"
+                active_text = "在籍" if safe_int(row.get("is_active", 1), 1) == 1 else "退職"
                 icon_url = get_user_icon(user_name)
+                safe_key_name = user_name.replace(" ", "_")
 
                 st.markdown(
                     f'''
                     <div class="room-card">
                         <div class="room-head">
                             <div style="display:flex; align-items:center; gap:10px;">
-                                <img src="{icon_url}" style="width:42px;height:42px;border-radius:999px;object-fit:cover;border:1px solid #334155;">
+                                <img src="{esc(icon_url)}" style="width:42px;height:42px;border-radius:999px;object-fit:cover;border:1px solid #334155;">
                                 <div>
-                                    <div class="room-name">{user_name}</div>
-                                    <div class="room-sub">{role_text} / {active_text}</div>
+                                    <div class="room-name">{esc(user_name)}</div>
+                                    <div class="room-sub">{esc(role_text)} / {esc(active_text)}</div>
                                 </div>
                             </div>
                         </div>
@@ -1888,7 +1957,7 @@ if st.session_state.logged_in:
 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button(f"{user_name} を在籍にする", key=f"part4_activate_{user_name}"):
+                    if st.button(f"{user_name} を在籍にする", key=f"part4_activate_{safe_key_name}"):
                         ok, msg = set_user_active_flag(user_name, True)
                         if ok:
                             st.success(msg)
@@ -1896,7 +1965,7 @@ if st.session_state.logged_in:
                         else:
                             st.warning(msg)
                 with c2:
-                    if st.button(f"{user_name} を退職にする", key=f"part4_deactivate_{user_name}"):
+                    if st.button(f"{user_name} を退職にする", key=f"part4_deactivate_{safe_key_name}"):
                         ok, msg = set_user_active_flag(user_name, False)
                         if ok:
                             st.success(msg)
