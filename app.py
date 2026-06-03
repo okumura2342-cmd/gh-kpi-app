@@ -29,7 +29,11 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(
 )
 
 client = gspread.authorize(creds)
-spreadsheet = client.open("GH重点項目管理DB")
+try:
+    spreadsheet = client.open("GH重点項目管理DB")
+except Exception as e:
+    st.error(str(e))
+    st.stop()
 
 # ====================================
 # シート取得 / なければ作成
