@@ -208,6 +208,16 @@ def get_entries_df():
     data = entries_sheet.get_all_records()
     return safe_df(data, ENTRIES_HEADERS)
 
+@st.cache_data(ttl=30)
+def get_settings_df():
+
+    data = settings_sheet.get_all_records()
+
+    return safe_df(
+        data,
+        SETTINGS_HEADERS
+    )
+
 
 @st.cache_data(ttl=30)
 def get_drafts_df():
