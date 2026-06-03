@@ -203,6 +203,8 @@ def get_users_df():
 
 @st.cache_data(ttl=30)
 def get_entries_df():
+
+    st.write("entries 読み込み")
     data = entries_sheet.get_all_records()
     return safe_df(data, ENTRIES_HEADERS)
 
@@ -215,11 +217,17 @@ def get_drafts_df():
 
 @st.cache_data(ttl=30)
 def get_messages_df():
+
+    st.write("messages 読み込み")
+
     data = messages_sheet.get_all_records()
+
     return safe_df(data, MESSAGES_HEADERS)
 
 @st.cache_data(ttl=30)
-def get_settings_df():
+def get_users_df():
+
+    st.write("users 読み込み")
     data = settings_sheet.get_all_records()
     df = safe_df(data, SETTINGS_HEADERS)
     if len(df) > 0:
