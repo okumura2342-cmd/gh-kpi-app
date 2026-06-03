@@ -417,7 +417,6 @@ div[data-baseweb="select"] > div,
 if not st.session_state.logged_in:
 
     st.title("重点項目管理")
-    st.caption("Part1: ログイン・基本画面まで")
 
     users_df = get_users_df()
 
@@ -597,7 +596,6 @@ else:
 
     elif selected == "入力":
         st.subheader("重点項目入力")
-        st.info("Part2 で入力本体を追加します。")
 
     # ====================================
     # 連絡（基本枠のみ）
@@ -605,7 +603,6 @@ else:
 
     elif "連絡" in selected:
         st.subheader("リーダーとの連絡")
-        st.info("Part3 でアイコン付きチャット・既読表示・LINE風UIを追加します。")
 
     # ====================================
     # 履歴（基本枠のみ）
@@ -613,7 +610,6 @@ else:
 
     elif selected == "履歴":
         st.subheader("履歴")
-        st.info("Part2 で履歴一覧と編集導線を追加します。")
 
     # ====================================
     # 確認（基本枠のみ）
@@ -621,7 +617,6 @@ else:
 
     elif selected == "確認" and st.session_state.role == "leader":
         st.subheader("確認")
-        st.info("Part3 で職員別の提出状況一覧・確認ボタン・個人チャット画面を追加します。")
 
     # ====================================
     # 集計（基本枠のみ）
@@ -629,7 +624,6 @@ else:
 
     elif selected == "集計" and st.session_state.role == "leader":
         st.subheader("集計")
-        st.info("Part4 で月次集計と見やすい表示を追加します。")
 
     # ====================================
     # 管理（基本枠のみ）
@@ -637,7 +631,6 @@ else:
 
     elif selected == "管理" and st.session_state.role == "leader":
         st.subheader("管理")
-        st.info("Part4 で職員追加・在籍管理・アイコン初期設定を追加します。")
 
     # ====================================
     # 設定（基本枠のみ）
@@ -645,7 +638,6 @@ else:
 
     elif selected == "設定":
         st.subheader("設定")
-        st.info("Part4 でアイコン設定・デフォルト画像切替を追加します。")
 
     # ====================================
     # ログアウト
