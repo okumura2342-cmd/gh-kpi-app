@@ -211,13 +211,19 @@ def get_entries_df():
 @st.cache_data(ttl=30)
 def get_settings_df():
 
+    st.write("settings 読み込み")
+
     data = settings_sheet.get_all_records()
 
-    return safe_df(
-        data,
-        SETTINGS_HEADERS
-    )
+    df = safe_df(data, SETTINGS_HEADERS)
 
+    if len(df) > 0:
+        df["use_default_icon"] = pd.to_numeric(
+            df["use_default_icon"],
+            errors="coerce"
+        ).fillna(1).astype(int)
+
+    return df
 
 @st.cache_data(ttl=30)
 def get_drafts_df():
@@ -234,15 +240,6 @@ def get_messages_df():
 
     return safe_df(data, MESSAGES_HEADERS)
 
-@st.cache_data(ttl=30)
-def get_users_df():
-
-    st.write("users 読み込み")
-    data = settings_sheet.get_all_records()
-    df = safe_df(data, SETTINGS_HEADERS)
-    if len(df) > 0:
-        df["use_default_icon"] = pd.to_numeric(df["use_default_icon"], errors="coerce").fillna(1).astype(int)
-    return df
 
 # ====================================
 # 共通関数
