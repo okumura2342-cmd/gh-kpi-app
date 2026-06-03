@@ -211,11 +211,44 @@ def get_drafts_df():
 
 
 def get_messages_df():
-    data = messages_sheet.get_all_records()
-    df = safe_df(data, MESSAGES_HEADERS)
-    if len(df) > 0:
-        df["is_read"] = pd.to_numeric(df["is_read"], errors="coerce").fillna(0).astype(int)
-    return df
+
+    try:
+
+        data = messages_sheet.get_all_records()
+
+        if not data:
+
+            return pd.DataFrame(columns=[
+                "id",
+                "sender_name",
+                "sender_role",
+                "target_user",
+                "month",
+                "message",
+                "is_read",
+                "created_at",
+                "read_at",
+                "icon_url"
+            ])
+
+        return pd.DataFrame(data)
+
+    except Exception as e:
+
+        st.error(f"messagesエラー: {e}")
+
+        return pd.DataFrame(columns=[
+            "id",
+            "sender_name",
+            "sender_role",
+            "target_user",
+            "month",
+            "message",
+            "is_read",
+            "created_at",
+            "read_at",
+            "icon_url"
+        ])
 
 
 def get_settings_df():
