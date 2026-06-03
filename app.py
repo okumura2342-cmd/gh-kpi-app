@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 import html
 from contextlib import contextmanager
+from gspread.exceptions import APIError, WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
@@ -66,11 +67,36 @@ def bordered_container():
             yield
 
 
+def stop_on_google_error(action, error):
+    if isinstance(error, APIError):
+        st.error(f"Google Sheets の操作に失敗しました: {action}")
+        st.info(
+            "Google Sheets API が有効か、サービスアカウントにスプレッドシートを共有しているか、"
+            "シート名と権限に間違いがないか確認してください。"
+        )
+    else:
+        st.error(f"Google Sheets の操作中にエラーが発生しました: {action}")
+    st.caption(str(error))
+    st.stop()
+
+
+def google_call(action, func):
+    try:
+        return func()
+    except Exception as e:
+        stop_on_google_error(action, e)
+
+
 def sheet_update(ws, range_name, values):
     try:
-        ws.update(range_name=range_name, values=values)
+        return ws.update(range_name=range_name, values=values)
     except TypeError:
-        ws.update(range_name, values)
+        return google_call(
+            f"{ws.title} の {range_name} を更新",
+            lambda: ws.update(range_name, values)
+        )
+    except Exception as e:
+        stop_on_google_error(f"{ws.title} の {range_name} を更新", e)
 
 # ====================================
 # ページ設定
@@ -111,18 +137,32 @@ except Exception as e:
 def get_or_create_worksheet(sheet_name, headers):
     try:
         ws = spreadsheet.worksheet(sheet_name)
-    except:
-        ws = spreadsheet.add_worksheet(
-            title=sheet_name,
-            rows=2000,
-            cols=max(len(headers), 10)
+    except WorksheetNotFound:
+        ws = google_call(
+            f"{sheet_name} シートを作成",
+            lambda: spreadsheet.add_worksheet(
+                title=sheet_name,
+                rows=2000,
+                cols=max(len(headers), 10)
+            )
         )
-        ws.append_row(headers)
+        google_call(
+            f"{sheet_name} シートにヘッダを書き込み",
+            lambda: ws.append_row(headers)
+        )
+    except Exception as e:
+        stop_on_google_error(f"{sheet_name} シートを取得", e)
 
-    values = ws.get_all_values()
+    values = google_call(
+        f"{sheet_name} シートを読み込み",
+        lambda: ws.get_all_values()
+    )
 
     if len(values) == 0:
-        ws.append_row(headers)
+        google_call(
+            f"{sheet_name} シートにヘッダを書き込み",
+            lambda: ws.append_row(headers)
+        )
     else:
         first_row = values[0]
         if len(first_row) == 0 or all(str(x).strip() == "" for x in first_row):
@@ -224,7 +264,10 @@ settings_sheet = get_or_create_worksheet("settings", SETTINGS_HEADERS)
 # ====================================
 
 def seed_users_if_empty():
-    values = users_sheet.get_all_records()
+    values = google_call(
+        "users シートの初期データ確認",
+        lambda: users_sheet.get_all_records()
+    )
     if len(values) > 0:
         return
 
@@ -238,7 +281,10 @@ def seed_users_if_empty():
     ]
 
     for row in rows:
-        users_sheet.append_row(row)
+        google_call(
+            "users シートに初期ユーザーを追加",
+            lambda row=row: users_sheet.append_row(row)
+        )
 
 seed_users_if_empty()
 
@@ -258,7 +304,10 @@ def safe_df(records, columns):
 
 @st.cache_data(ttl=30)
 def get_users_df():
-    data = users_sheet.get_all_records()
+    data = google_call(
+        "users シートを読み込み",
+        lambda: users_sheet.get_all_records()
+    )
     df = safe_df(data, USERS_HEADERS)
 
     if len(df) > 0:
@@ -272,12 +321,18 @@ def get_users_df():
 
 @st.cache_data(ttl=30)
 def get_entries_df():
-    data = entries_sheet.get_all_records()
+    data = google_call(
+        "entries シートを読み込み",
+        lambda: entries_sheet.get_all_records()
+    )
     return safe_df(data, ENTRIES_HEADERS)
 
 @st.cache_data(ttl=30)
 def get_settings_df():
-    data = settings_sheet.get_all_records()
+    data = google_call(
+        "settings シートを読み込み",
+        lambda: settings_sheet.get_all_records()
+    )
 
     df = safe_df(data, SETTINGS_HEADERS)
 
@@ -291,13 +346,19 @@ def get_settings_df():
 
 @st.cache_data(ttl=30)
 def get_drafts_df():
-    data = drafts_sheet.get_all_records()
+    data = google_call(
+        "drafts シートを読み込み",
+        lambda: drafts_sheet.get_all_records()
+    )
     return safe_df(data, DRAFTS_HEADERS)
 
 
 @st.cache_data(ttl=30)
 def get_messages_df():
-    data = messages_sheet.get_all_records()
+    data = google_call(
+        "messages シートを読み込み",
+        lambda: messages_sheet.get_all_records()
+    )
     df = safe_df(data, MESSAGES_HEADERS)
 
     if len(df) > 0:
@@ -748,7 +809,10 @@ else:
 # ====================================
 
 def find_row_number_by_id(ws, target_id):
-    values = ws.get_all_values()
+    values = google_call(
+        f"{ws.title} シートを読み込み",
+        lambda: ws.get_all_values()
+    )
     if len(values) <= 1:
         return None
 
@@ -794,7 +858,10 @@ def get_entry_by_id(entry_id):
 def delete_draft_by_id(draft_id):
     row_num = find_row_number_by_id(drafts_sheet, draft_id)
     if row_num:
-        drafts_sheet.delete_rows(row_num)
+        google_call(
+            "drafts シートから下書きを削除",
+            lambda: drafts_sheet.delete_rows(row_num)
+        )
 
 
 def save_draft_record(
@@ -848,9 +915,15 @@ def save_draft_record(
                 values
             )
         else:
-            drafts_sheet.append_row(values[0])
+            google_call(
+                "drafts シートに下書きを追加",
+                lambda: drafts_sheet.append_row(values[0])
+            )
     else:
-        drafts_sheet.append_row(values[0])
+        google_call(
+            "drafts シートに下書きを追加",
+            lambda: drafts_sheet.append_row(values[0])
+        )
 
 
 def submit_entry_record(
@@ -894,9 +967,15 @@ def submit_entry_record(
                 values
             )
         else:
-            entries_sheet.append_row(values[0])
+            google_call(
+                "entries シートに提出データを追加",
+                lambda: entries_sheet.append_row(values[0])
+            )
     else:
-        entries_sheet.append_row(values[0])
+        google_call(
+            "entries シートに提出データを追加",
+            lambda: entries_sheet.append_row(values[0])
+        )
 
     # 同月の下書きがあれば削除
     draft_row = get_user_month_draft(user_name, month)
@@ -1365,18 +1444,21 @@ def save_chat_message(room_user, sender_name, sender_role, message, month):
     message_id = str(datetime.now().timestamp())
     icon = get_user_icon(sender_name)
 
-    messages_sheet.append_row([
-        message_id,
-        room_user,
-        sender_name,
-        sender_role,
-        text,
-        month,
-        0,
-        now_str(),
-        "",
-        icon
-    ])
+    google_call(
+        "messages シートにメッセージを追加",
+        lambda: messages_sheet.append_row([
+            message_id,
+            room_user,
+            sender_name,
+            sender_role,
+            text,
+            month,
+            0,
+            now_str(),
+            "",
+            icon
+        ])
+    )
     return True
 
 
@@ -1399,7 +1481,10 @@ def get_room_messages(room_user, month):
 
 
 def mark_room_messages_as_read(room_user, viewer_name, month):
-    values = messages_sheet.get_all_values()
+    values = google_call(
+        "messages シートを読み込み",
+        lambda: messages_sheet.get_all_values()
+    )
     if len(values) <= 1:
         return
 
@@ -1416,8 +1501,14 @@ def mark_room_messages_as_read(room_user, viewer_name, month):
             and row_sender_name != str(viewer_name)
             and row_is_read != "1"
         ):
-            messages_sheet.update_cell(idx, 7, 1)
-            messages_sheet.update_cell(idx, 9, now_str())
+            google_call(
+                "messages シートの既読状態を更新",
+                lambda idx=idx: messages_sheet.update_cell(idx, 7, 1)
+            )
+            google_call(
+                "messages シートの既読日時を更新",
+                lambda idx=idx: messages_sheet.update_cell(idx, 9, now_str())
+            )
 
 
 def get_room_unread_count(room_user, viewer_name, month):
@@ -1671,7 +1762,10 @@ if st.session_state.logged_in:
                     st.rerun()
 
 def find_user_row_by_name(user_name):
-    values = users_sheet.get_all_values()
+    values = google_call(
+        "users シートを読み込み",
+        lambda: users_sheet.get_all_values()
+    )
     if len(values) <= 1:
         return None
 
@@ -1683,7 +1777,10 @@ def find_user_row_by_name(user_name):
 
 
 def find_setting_row_by_name(user_name):
-    values = settings_sheet.get_all_values()
+    values = google_call(
+        "settings シートを読み込み",
+        lambda: settings_sheet.get_all_values()
+    )
     if len(values) <= 1:
         return None
 
@@ -1710,11 +1807,17 @@ def save_user_icon_setting(user_name, icon_url, use_default_icon):
     if setting_row:
         sheet_update(settings_sheet, f"A{setting_row}:E{setting_row}", setting_values)
     else:
-        settings_sheet.append_row(setting_values[0])
+        google_call(
+            "settings シートにアイコン設定を追加",
+            lambda: settings_sheet.append_row(setting_values[0])
+        )
 
     user_row = find_user_row_by_name(user_name)
     if user_row:
-        current = users_sheet.row_values(user_row)
+        current = google_call(
+            "users シートのユーザー行を読み込み",
+            lambda: users_sheet.row_values(user_row)
+        )
         current = current + [""] * (7 - len(current))
         current[4] = icon_url
         current[5] = str(use_default_flag)
@@ -1750,7 +1853,10 @@ def add_new_user(user_name, role="staff"):
         1,
         now_str()
     ]
-    users_sheet.append_row(new_row)
+    google_call(
+        "users シートにユーザーを追加",
+        lambda: users_sheet.append_row(new_row)
+    )
     return True, f"{user_name} を追加しました"
 
 
@@ -1759,7 +1865,10 @@ def set_user_active_flag(user_name, is_active):
     if not row_num:
         return False, "対象ユーザーが見つかりません"
 
-    current = users_sheet.row_values(row_num)
+    current = google_call(
+        "users シートのユーザー行を読み込み",
+        lambda: users_sheet.row_values(row_num)
+    )
     current = current + [""] * (7 - len(current))
     current[3] = "1" if is_active else "0"
     sheet_update(users_sheet, f"A{row_num}:G{row_num}", [current[:7]])
