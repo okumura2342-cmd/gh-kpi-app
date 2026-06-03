@@ -187,6 +187,7 @@ def safe_df(records, columns):
     return df[columns]
 
 
+@st.cache_data(ttl=30)
 def get_users_df():
     data = users_sheet.get_all_records()
     df = safe_df(data, USERS_HEADERS)
@@ -200,57 +201,24 @@ def get_users_df():
     return df
 
 
+@st.cache_data(ttl=30)
 def get_entries_df():
     data = entries_sheet.get_all_records()
     return safe_df(data, ENTRIES_HEADERS)
 
 
+@st.cache_data(ttl=30)
 def get_drafts_df():
     data = drafts_sheet.get_all_records()
     return safe_df(data, DRAFTS_HEADERS)
 
 
+@st.cache_data(ttl=30)
 def get_messages_df():
+    data = messages_sheet.get_all_records()
+    return safe_df(data, MESSAGES_HEADERS)
 
-    try:
-
-        data = messages_sheet.get_all_records()
-
-        if not data:
-
-            return pd.DataFrame(columns=[
-                "id",
-                "sender_name",
-                "sender_role",
-                "target_user",
-                "month",
-                "message",
-                "is_read",
-                "created_at",
-                "read_at",
-                "icon_url"
-            ])
-
-        return pd.DataFrame(data)
-
-    except Exception as e:
-
-        st.error(f"messagesエラー: {e}")
-
-        return pd.DataFrame(columns=[
-            "id",
-            "sender_name",
-            "sender_role",
-            "target_user",
-            "month",
-            "message",
-            "is_read",
-            "created_at",
-            "read_at",
-            "icon_url"
-        ])
-
-
+@st.cache_data(ttl=30)
 def get_settings_df():
     data = settings_sheet.get_all_records()
     df = safe_df(data, SETTINGS_HEADERS)
@@ -1394,18 +1362,16 @@ def build_leader_confirm_rows(month):
     rows = []
 
     for _, user_row in staff_df.iterrows():
+
         staff_name = str(user_row["name"])
-        status = get_submit_status(staff_name, month)
-        latest_message, latest_at = get_latest_room_message(staff_name, month)
-        unread_count = get_room_unread_count(staff_name, st.session_state.user_name, month)
 
         rows.append({
             "name": staff_name,
-            "status": status,
-            "latest_message": latest_message,
-            "latest_at": latest_at,
-            "unread_count": unread_count,
-            "icon_url": get_user_icon(staff_name)
+            "status": "テスト",
+            "latest_message": "",
+            "latest_at": "",
+            "unread_count": 0,
+            "icon_url": default_icon_url()
         })
 
     return rows
